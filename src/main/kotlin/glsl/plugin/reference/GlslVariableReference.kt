@@ -1,6 +1,7 @@
 package glsl.plugin.reference
 
 import com.intellij.codeInsight.lookup.LookupElement
+import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.impl.source.resolve.ResolveCache
@@ -12,12 +13,15 @@ import glsl.GlslTypes.MACRO_FUNCTION
 import glsl.GlslTypes.MACRO_OBJECT
 import glsl.plugin.psi.GlslVariable
 import glsl.plugin.psi.named.GlslNamedElement
+import glsl.plugin.psi.named.GlslNamedType
 import glsl.plugin.psi.named.GlslNamedVariable
 import glsl.plugin.psi.named.types.user.GlslNamedBlockStructure
 import glsl.plugin.reference.FilterType.CONTAINS
 import glsl.plugin.utils.GlslBuiltinUtils.getBuiltinConstants
 import glsl.plugin.utils.GlslBuiltinUtils.getBuiltinFuncs
 import glsl.plugin.utils.GlslBuiltinUtils.getShaderVariables
+import glsl.plugin.utils.GlslUtils.getIndexedType
+import glsl.plugin.utils.GlslUtils.getType
 import glsl.psi.impl.GlslFunctionDeclaratorImpl
 import glsl.psi.interfaces.*
 
@@ -25,56 +29,97 @@ class GlslVariableReference(private val element: GlslVariable, textRange: TextRa
     GlslReference(element, textRange) {
 
     private val resolver = AbstractResolver<GlslReference, GlslNamedVariable> { reference, _ ->
-        reference.doResolve()
-        reference.resolvedReferences.firstOrNull() as? GlslNamedVariable
+        synchronized(reference) {
+            reference.doResolve()
+            reference.resolvedReferences.firstOrNull() as? GlslNamedVariable
+        }
     }
 
     /**
      *
      */
     override fun resolve(): GlslNamedVariable? {
-        if (!shouldResolve()) return null
-        val resolveCache = ResolveCache.getInstance(project)
-        return resolveCache.resolveWithCaching(this, resolver, true, false)
+        return synchronized(this) {
+            if (!shouldResolve()) return@synchronized null
+            val resolveCache = ResolveCache.getInstance(project)
+            resolveCache.resolveWithCaching(this, resolver, true, false)
+        }
     }
 
     /**
      *
      */
     override fun getVariants(): Array<LookupElement> {
-        doResolve(CONTAINS)
-        return resolvedReferences.mapNotNull { it.getLookupElement() }.toTypedArray()
+        return synchronized(this) {
+            doResolve(CONTAINS)
+            val prioritizeSwizzles = element.parent is GlslPostfixStructMember ||
+                element.parent?.parent is GlslPostfixStructMember
+            val expectedType = expectedInitializerType()
+            resolvedReferences.mapNotNull { namedElement ->
+                val lookupElement = namedElement.getLookupElement() ?: return@mapNotNull null
+                when {
+                    prioritizeSwizzles && lookupElement.lookupString in PREFERRED_SWIZZLES ->
+                        PrioritizedLookupElement.withPriority(lookupElement, 300.0)
+                    expectedType != null && namedElement.getAssociatedType()?.typeAsToken() == expectedType.typeAsToken() ->
+                        PrioritizedLookupElement.withPriority(lookupElement, 200.0)
+                    expectedType == null ->
+                        PrioritizedLookupElement.withPriority(lookupElement, 125.0)
+                    else -> lookupElement
+                }
+            }.toTypedArray()
+        }
     }
 
     /**
      *
      */
     override fun resolveMany(): List<GlslNamedElement> {
-        if (!shouldResolve()) return emptyList()
-        val resolveCache = ResolveCache.getInstance(project)
-        resolveCache.resolveWithCaching(this, resolver, true, false)
-        return resolvedReferences
+        return synchronized(this) {
+            if (!shouldResolve()) return@synchronized emptyList()
+            doResolve()
+            resolvedReferences.toList()
+        }
+    }
+
+    private fun expectedInitializerType(): GlslNamedType? {
+        val declaration = getParentOfType(element, GlslSingleDeclaration::class.java) ?: return null
+        if (declaration.variableIdentifier == element) return null
+        if (isInsideCallArgument()) return null
+        return getType(declaration.typeSpecifier)
+    }
+
+    private fun isInsideCallArgument(): Boolean {
+        val elementOffset = element.textRange.startOffset
+        val functionCall = getParentOfType(element, GlslFunctionCall::class.java)
+        if (functionCall != null && functionCall.textRange.startOffset < elementOffset) return true
+        val constructorCall = getParentOfType(element, GlslConstructorCall::class.java)
+        return constructorCall != null && constructorCall.textRange.startOffset < elementOffset
     }
 
     /**
      *
      */
     override fun doResolve(filterType: FilterType) {
-        try {
-            resolvedReferences.clear()
-            currentFilterType = filterType
-            lookupInPostfixStructMember()
-            lookupInBuiltin()
-            val statement = getParentOfType(element, GlslStatement::class.java)
-            val externalDeclaration: GlslExternalDeclaration?
-            if (statement != null) { // If true, we are inside a function (statements cannot occur outside).
-                externalDeclaration = lookupInFunctionScope(statement)
-            } else {
-                externalDeclaration = getParentOfType(element, GlslExternalDeclaration::class.java)
+        synchronized(this) {
+            try {
+                resolvedReferences.clear()
+                includeFiles.clear()
+                currentFilterType = filterType
+                lookupInPostfixStructMember()
+                lookupInBuiltin()
+                val statement = getParentOfType(element, GlslStatement::class.java)
+                val externalDeclaration: GlslExternalDeclaration?
+                if (statement != null) { // If true, we are inside a function (statements cannot occur outside).
+                    externalDeclaration = lookupInFunctionScope(statement)
+                } else {
+                    externalDeclaration = getParentOfType(element, GlslExternalDeclaration::class.java)
+                }
+                lookupInGlobalScope(externalDeclaration)
+            } catch (_: StopLookupException) {
+                // A matching reference deliberately stops the remaining scope walk.
+            } finally {
+                includeFiles.clear()
             }
-            lookupInGlobalScope(externalDeclaration)
-        } catch (_: StopLookupException) {
-            includeFiles.clear()
         }
     }
 
@@ -157,9 +202,11 @@ class GlslVariableReference(private val element: GlslVariable, textRange: TextRa
      *
      */
     private fun lookupInBuiltin() {
-        findReferenceInElementMap(getShaderVariables())
-        findReferenceInElementMap(getBuiltinConstants())
-        val builtinFuncs = getBuiltinFuncs()[element.name] ?: return
+        findReferenceInElementMap(getShaderVariables(project))
+        findReferenceInElementMap(getBuiltinConstants(project))
+        if (currentFilterType == CONTAINS) return
+
+        val builtinFuncs = getBuiltinFuncs(project)[element.name] ?: return
         for (func in builtinFuncs) {
             resolveFunction(func)
         }
@@ -169,6 +216,11 @@ class GlslVariableReference(private val element: GlslVariable, textRange: TextRa
      *
      */
     private fun resolveFunction(func: GlslFunctionDeclarator) {
+        if (currentFilterType == CONTAINS) {
+            findReferenceInElement(func)
+            return
+        }
+
         val funcCall = element.parent as? GlslFunctionCall ?: return
         val exprTypes = funcCall.exprNoAssignmentList.map { it.getExprType() }
         val paramTypes = (func as? GlslFunctionDeclaratorImpl)?.getParameterTypes() ?: return
@@ -246,8 +298,7 @@ class GlslVariableReference(private val element: GlslVariable, textRange: TextRa
      */
     private fun lookupInPostfixFieldSelection(postfixFieldSelection: GlslPostfixFieldSelection?) {
         if (postfixFieldSelection == null) return
-        val rootExpr = getPostfixIdentifier(postfixFieldSelection.postfixExpr) ?: return
-        var nextMemberType = rootExpr.resolveReference()?.getAssociatedType() ?: return
+        var nextMemberType = getPostfixType(postfixFieldSelection.postfixExpr) ?: return
 
         val identifierList = postfixFieldSelection.postfixStructMemberList.map {
             if (it.functionCall != null) it.functionCall!!.variableIdentifier
@@ -291,13 +342,31 @@ class GlslVariableReference(private val element: GlslVariable, textRange: TextRa
     /**
      *
      */
-    private fun getPostfixIdentifier(postfixExpr: GlslPostfixExpr?): GlslVariable? {
+    private fun getPostfixType(postfixExpr: GlslPostfixExpr?): GlslNamedType? {
         return when (postfixExpr) {
-            is GlslPrimaryExpr -> postfixExpr.variableIdentifier as? GlslVariable
-            is GlslFunctionCall -> postfixExpr.variableIdentifier as? GlslVariable
-            is GlslPostfixArrayIndex -> getPostfixIdentifier(postfixExpr.postfixExpr)
-            is GlslPostfixInc -> getPostfixIdentifier(postfixExpr.postfixExpr)
+            is GlslPrimaryExpr -> {
+                val variable = postfixExpr.variableIdentifier as? GlslVariable
+                variable?.resolveReference()?.getAssociatedType() ?: postfixExpr.expr?.getExprType()
+            }
+            is GlslFunctionCall -> {
+                val variable = postfixExpr.variableIdentifier as? GlslVariable
+                variable?.resolveReference()?.getAssociatedType()
+            }
+            is GlslConstructorCall -> getType(postfixExpr.typeSpecifier)
+            is GlslPostfixArrayIndex -> getIndexedType(
+                postfixExpr,
+                getPostfixType(postfixExpr.postfixExpr),
+            )
+            is GlslPostfixInc -> getPostfixType(postfixExpr.postfixExpr)
             else -> null
         }
+    }
+
+    companion object {
+        private val PREFERRED_SWIZZLES = setOf(
+            "x", "xy", "xyz", "xyzw",
+            "r", "rg", "rgb", "rgba", "argb",
+            "s", "st", "stp", "stpq",
+        )
     }
 }

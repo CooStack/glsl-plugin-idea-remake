@@ -31,7 +31,7 @@ class GlslInspectionMissingReturn : GlslInspection() {
                 val endOffset = functionDefinition.textRangeInParent.endOffset
                 val textRange = TextRange(endOffset - 1, endOffset)
                 val funcName = functionDeclarator.name
-                val msg = errorMessageCode.message.format(funcName)
+                val msg = errorMessageCode.message(funcName ?: "")
                 holder.registerProblem(functionDefinition, msg, ProblemHighlightType.GENERIC_ERROR, textRange)
             }
         }

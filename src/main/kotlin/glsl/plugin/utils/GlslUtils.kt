@@ -10,10 +10,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.tree.IElementType
 import com.intellij.psi.tree.TokenSet
+import com.intellij.psi.util.PsiTreeUtil.findChildOfType
 import glsl.GlslTypes.BUILTIN_TYPE_SCALAR
 import glsl.data.ShaderType
+import glsl.plugin.language.GlslFileType
+import glsl.plugin.psi.GlslVariable
 import glsl.plugin.psi.named.GlslNamedType
 import glsl.plugin.psi.named.types.builtins.GlslBuiltinRest
 import glsl.plugin.psi.named.types.builtins.GlslMatrix
@@ -21,11 +25,10 @@ import glsl.plugin.psi.named.types.builtins.GlslScalar
 import glsl.plugin.psi.named.types.builtins.GlslVector
 import glsl.plugin.psi.named.types.user.GlslNamedStructSpecifier
 import glsl.psi.impl.GlslBuiltinTypeScalarImpl
-import glsl.psi.interfaces.GlslFunctionDeclarator
-import glsl.psi.interfaces.GlslPpIncludeDeclaration
-import glsl.psi.interfaces.GlslTypeSpecifier
+import glsl.psi.interfaces.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.nio.charset.StandardCharsets
 import javax.swing.Icon
 
 /**
@@ -40,7 +43,7 @@ object GlslUtils {
     fun getResourceFileAsString(path: String): String? {
         val file = GlslUtils::class.java.classLoader.getResourceAsStream(path)
         if (file != null) {
-            val reader = BufferedReader(InputStreamReader(file))
+            val reader = BufferedReader(InputStreamReader(file, StandardCharsets.UTF_8))
             return reader.lines().toArray().joinToString("\n")
         }
         return null
@@ -212,6 +215,47 @@ object GlslUtils {
         val composite = ASTFactory.composite(BUILTIN_TYPE_SCALAR)
         composite.rawAddChildren(leaf(elementType, text))
         return GlslBuiltinTypeScalarImpl(composite)
+    }
+
+    @JvmStatic
+    fun createBuiltinTypeElement(project: Project, typeName: String): GlslNamedType? {
+        val file = PsiFileFactory.getInstance(project)
+            .createFileFromText("dummy.glsl", GlslFileType(), "$typeName value;")
+        return getType(findChildOfType(file, GlslTypeSpecifier::class.java))
+    }
+
+    @JvmStatic
+    fun getIndexedType(arrayIndex: GlslPostfixArrayIndex, containerType: GlslNamedType?): GlslNamedType? {
+        var indexedType = containerType ?: return null
+        var arrayDimensions = getDeclaredArrayDimensions(arrayIndex.postfixExpr)
+
+        repeat(arrayIndex.exprList.size) {
+            if (arrayDimensions > 0) {
+                arrayDimensions--
+            } else {
+                indexedType = indexedType.getIndexedType() ?: return null
+            }
+        }
+        return indexedType.takeIf { arrayDimensions == 0 }
+    }
+
+    private fun getDeclaredArrayDimensions(postfixExpr: GlslPostfixExpr): Int {
+        val primaryExpr = postfixExpr as? GlslPrimaryExpr ?: return 0
+        val variable = primaryExpr.variableIdentifier as? GlslVariable ?: return 0
+        val declaration = variable.resolveReference() ?: return 0
+        val arraySpecifier = findChildOfType(declaration, GlslArraySpecifier::class.java)
+            ?: findFollowingArraySpecifier(declaration)
+            ?: return 0
+        return arraySpecifier.text.count { it == '[' }
+    }
+
+    private fun findFollowingArraySpecifier(declaration: PsiElement): GlslArraySpecifier? {
+        var sibling = declaration.nextSibling
+        while (sibling != null && sibling.text != ",") {
+            if (sibling is GlslArraySpecifier) return sibling
+            sibling = sibling.nextSibling
+        }
+        return null
     }
 
     /**

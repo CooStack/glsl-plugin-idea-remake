@@ -4,23 +4,18 @@ import com.intellij.lang.documentation.DocumentationProvider
 import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import glsl.plugin.GlslBundle
 import glsl.plugin.utils.GlslBuiltinUtils.isBuiltinFunction
 import glsl.plugin.utils.GlslUtils
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  *
  */
 class GlslDocumentationProvider : DocumentationProvider {
-    private var document: Document? = null
-
-    init {
-        val fileText = GlslUtils.getResourceFileAsString("builtin-objects/builtin-funcs-docs.html")
-        if (fileText != null) {
-            document = Jsoup.parse(fileText)
-        }
-    }
+    private val documents = ConcurrentHashMap<String, Document>()
 
     /**
      *
@@ -31,7 +26,7 @@ class GlslDocumentationProvider : DocumentationProvider {
         contextElement: PsiElement?,
         targetOffset: Int
     ): PsiElement? {
-        if (isBuiltinFunction(contextElement?.text)) {
+        if (isBuiltinFunction(file.project, contextElement?.text)) {
             return contextElement
         }
         return null
@@ -42,9 +37,18 @@ class GlslDocumentationProvider : DocumentationProvider {
      */
     override fun generateDoc(element: PsiElement?, originalElement: PsiElement?): String? {
         val elementText = element?.text
-        if (isBuiltinFunction(elementText)) {
-            return document?.getElementById(elementText!!).toString()
+        if (element != null && isBuiltinFunction(element.project, elementText)) {
+            val resourcePath = GlslBundle.message("documentation.builtin.resource")
+            return getDocumentation(elementText!!, resourcePath)
         }
         return null
+    }
+
+    internal fun getDocumentation(functionName: String, resourcePath: String): String? {
+        val document = documents.computeIfAbsent(resourcePath) {
+            val fileText = GlslUtils.getResourceFileAsString(it) ?: return@computeIfAbsent Document("")
+            Jsoup.parse(fileText)
+        }
+        return document.getElementById(functionName)?.toString()
     }
 }

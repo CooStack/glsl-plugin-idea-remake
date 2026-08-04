@@ -4,7 +4,6 @@ import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.icons.AllIcons
 import com.intellij.lang.ASTNode
 import com.intellij.openapi.editor.colors.TextAttributesKey
-import com.intellij.psi.util.parentOfType
 import glsl.plugin.editor.highlighting.GlslTextAttributes
 import glsl.plugin.psi.named.GlslNamedType
 import glsl.plugin.psi.named.GlslNamedVariableImpl
@@ -57,8 +56,7 @@ abstract class GlslNamedFunctionDeclarator(node: ASTNode) : GlslNamedVariableImp
      *
      */
     override fun getLookupElement(returnTypeText: String?): LookupElement? {
-        val functionPrototype = getPsi().parentOfType<GlslFunctionDeclarator>() ?: return null
-        return GlslUtils.getFunctionLookupElement(functionPrototype, getLookupIcon())
+        return GlslUtils.getFunctionLookupElement(getPsi(), getLookupIcon())
     }
 
     /**

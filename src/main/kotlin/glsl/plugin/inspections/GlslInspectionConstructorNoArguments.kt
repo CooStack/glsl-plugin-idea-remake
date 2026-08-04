@@ -22,7 +22,7 @@ class GlslInspectionConstructorNoArguments : GlslInspection() {
                 val type = getType(constructorCall.typeSpecifier) ?: return
                 val args = constructorCall.exprNoAssignmentList
                 if (type.isPrimitive && args.isEmpty()) {
-                    holder.registerProblem(constructorCall, errorMessageCode.message, GENERIC_ERROR)
+                    holder.registerProblem(constructorCall, errorMessageCode.message(), GENERIC_ERROR)
                 }
             }
         }

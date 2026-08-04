@@ -32,7 +32,7 @@ abstract class GlslVector(node: ASTNode) : GlslBuiltinType(node) {
      *
      */
     override fun getStructMembers(): List<GlslNamedVariable> {
-        val vectors = GlslBuiltinUtils.getVecStructs()[name]
+        val vectors = GlslBuiltinUtils.getVecStructs(project)[name]
         val vectorMembers = vectors?.values?.toList()
         return vectorMembers ?: emptyList()
     }
@@ -68,7 +68,7 @@ abstract class GlslVector(node: ASTNode) : GlslBuiltinType(node) {
             is GlslVector -> return this
             is GlslMatrix -> {
                 if (operation == "*") return this
-                val msg = GlslErrorCode.DOES_NOT_OPERATE_ON.message.format(operation, name, other.name)
+                val msg = GlslErrorCode.DOES_NOT_OPERATE_ON.message(operation, name ?: "", other.name ?: "")
                 glslError = GlslError(GlslErrorCode.DOES_NOT_OPERATE_ON, msg)
                 return this
             }

@@ -26,7 +26,7 @@ class GlslInspectionIncompatibleType : GlslInspection() {
                 val declarationType = singleDeclaration.getAssociatedType() ?: return
                 val exprType = expr.getExprType() ?: return
                 if (declarationType.isEqual(exprType)) return
-                holder.registerProblem(expr, GlslErrorCode.INCOMPATIBLE_TYPES_IN_INIT.message, GENERIC_ERROR)
+                holder.registerProblem(expr, GlslErrorCode.INCOMPATIBLE_TYPES_IN_INIT.message(), GENERIC_ERROR)
             }
         }
     }

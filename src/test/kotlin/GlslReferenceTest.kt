@@ -182,7 +182,8 @@ class GlslReferenceTest : BasePlatformTestCase() {
     fun testReference23() {
         val reference = myFixture.getReferenceAtCaretPosition("ReferenceFile23.glsl")
         val resolve = reference?.resolve()
-        assertNull(resolve)
+        assertInstanceOf(resolve, GlslStructDeclarator::class.java)
+        assertEquals("xyz", (resolve as GlslStructDeclarator).name)
     }
 
     fun testReference24() {

@@ -245,6 +245,8 @@ INCLUDE_PATH={IDENTIFIER}([\s\/]*{IDENTIFIER}\s*)*(\.{IDENTIFIER})?
   "patch"                          { return PATCH; }
   "sample"                         { return SAMPLE; }
   "subroutine"                     { return SUBROUTINE; }
+  "taskPayloadSharedEXT"           { return TASKPAYLOADSHAREDEXT; }
+  "perprimitiveEXT"                { return PERPRIMITIVEEXT; }
   "callableDataNV"                 { return CALLDATANV; }
   "callableDataEXT"                { return CALLDATAEXT; }
   "callableDataInNV"               { return CALLDATAINNV; }

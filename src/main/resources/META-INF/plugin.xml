@@ -3,6 +3,8 @@
     <name>GLSL</name>
     <vendor>Roi Mordechay</vendor>
 
+    <resource-bundle>messages.GlslBundle</resource-bundle>
+
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
@@ -67,22 +69,24 @@
         <multiHostInjector              implementation="glsl.plugin.editor.GlslMultiHostInjector"/>
 
         <!--  Inspections  -->
-        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="Incompatible types in initialization"
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.incompatible.type.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionIncompatibleType"/>
 <!--        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="No matching function for call"-->
 <!--                                        implementationClass="glsl.plugin.inspections.GlslInspectionNoMatchingFunction"/>-->
-        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="Too many arguments to constructor"
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.too.many.arguments.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionTooManyArguments"/>
-        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="Too few arguments to constructor"
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.too.few.arguments.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionTooFewArguments"/>
-        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="Missing return for function"
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.missing.return.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionMissingReturn"/>
-        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="Operator does not operate on"
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.operator.does.not.operate.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionOperatorDoesNotOperate"/>
-        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="Constructor of primitive type must have at least one argument"
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.constructor.no.arguments.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionConstructorNoArguments"/>
-        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="Cyclic imports"
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.cyclic.imports.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionCyclicImports"/>
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.invalid.swizzle.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
+                                        implementationClass="glsl.plugin.inspections.GlslInspectionInvalidSwizzle"/>
     </extensions>
 
     <actions>

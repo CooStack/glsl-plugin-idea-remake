@@ -25,6 +25,7 @@ interface GlslNamedType : GlslNamedElement {
     fun canCast(other: IElementType?): Boolean
     fun getBinaryType(other: GlslNamedElement?, operation: String): GlslNamedType?
     fun getScalarType(): GlslNamedType?
+    fun getIndexedType(): GlslNamedType? = getScalarType()
 
     /**
      *

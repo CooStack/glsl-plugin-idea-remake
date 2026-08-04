@@ -1,5 +1,33 @@
 # GLSL Plugin Changelog
 
+## [1.1.8]
+### Added
+- Complete `layout` declaration qualifiers and common OpenGL 4.6 layout identifiers.
+- Distinct type icons for built-in type completion items.
+- Simplified Chinese diagnostics, inspection names, and built-in function documentation selected from the IDE language.
+- Diagnostics for invalid vector swizzles such as `vec3(0.).argb`.
+
+### Fixed
+- Prevent concurrent reference resolution from corrupting shared lookup results and throwing `ArrayIndexOutOfBoundsException`.
+- Keep cached single-reference resolution independent from completion candidates.
+- Complete vector swizzles after constructor expressions such as `vec4(0.).rgba`.
+- Infer constructor swizzle result types so invalid assignments are reported on the correct expression without cascading to later statements.
+- Validate swizzles by vector dimension, including extension vector types.
+- Infer vector, matrix, and declared-array element types after indexing.
+- Keep constructor parentheses out of declarations and assignment left-hand sides while code is incomplete.
+- Rank local variables ahead of generic constructors in call arguments, while preserving expected-type ranking in initializers.
+
+## [1.1.7]
+### Added
+- Support for the `GL_EXT_mesh_shader` storage qualifiers.
+
+### Updated
+- Target IntelliJ IDEA 2026.2.0.1.
+
+### Fixed
+- Provide a stable GLSL code style configurable ID on current JetBrains IDEs.
+- Isolate built-in PSI caches by project to avoid references to disposed projects.
+
 ## [1.1.6]
 ### Updated
 - IDE build version.

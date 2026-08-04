@@ -25,7 +25,7 @@ class GlslInspectionTooFewArguments : GlslInspection() {
                 val actualParamsCount = constructorCall.exprNoAssignmentList.size
                 val expectedParamCount = constructorType.getStructMembers().size
                 if (expectedParamCount <= actualParamsCount) return
-                val msg = errorMessageCode.message.format(constructorType.name)
+                val msg = errorMessageCode.message(constructorType.name ?: "")
                 val startOffset = constructorCall.leftParen.textRangeInParent.startOffset
                 val endOffset = constructorCall.rightParen.textRangeInParent.endOffset
                 holder.registerProblem(constructorCall, msg, GENERIC_ERROR, TextRange(startOffset, endOffset))

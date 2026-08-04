@@ -14,6 +14,10 @@ import glsl.plugin.language.GlslLanguage
  */
 class GlslCodeStyleProvider : CodeStyleSettingsProvider() {
 
+    override fun getLanguage(): GlslLanguage {
+        return GlslLanguage.INSTANCE
+    }
+
     /**
     *
     */

@@ -1,4 +1,7 @@
 import com.intellij.codeInsight.completion.CompletionType
+import com.intellij.codeInsight.lookup.Lookup
+import com.intellij.codeInsight.lookup.LookupElementPresentation
+import com.intellij.icons.AllIcons
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class GlslCompletionTest : BasePlatformTestCase() {
@@ -71,13 +74,28 @@ class GlslCompletionTest : BasePlatformTestCase() {
         assertContainsElements(lookupElementStrings!!, "define")
     }
 
-//    fun testCompletion9() {
-//        myFixture.configureByFiles("CompletionFile9.glsl")
-//        myFixture.complete(CompletionType.BASIC)
-//        val lookupElementStrings = myFixture.lookupElementStrings
-//        assertNotNull(lookupElementStrings)
-//        assertContainsElements(lookupElementStrings!!, "110", "330", "450", "460")
-//    }
+    fun testCompletion9() {
+        myFixture.configureByFiles("CompletionFile9.glsl")
+        myFixture.complete(CompletionType.BASIC)
+
+        assertEquals("#version 330\nint main() {\n    int a = 1;\n    int a = 2;\n}", myFixture.file.text)
+    }
+
+    fun testVersionCompletionUsesExactNumberPrefix() {
+        myFixture.configureByText("VersionCompletion.glsl", "#version 330<caret> core")
+        myFixture.complete(CompletionType.BASIC)
+
+        assertEquals("#version 330 core", myFixture.file.text)
+        myFixture.lookupElementStrings?.let { assertSameElements(it.toList(), "330") }
+    }
+
+    fun testVersionCompletionDoesNotTriggerAfterVersionNumber() {
+        myFixture.configureByText("VersionCompletion.glsl", "#version 330 <caret>core")
+        myFixture.complete(CompletionType.BASIC)
+
+        assertEquals("#version 330 core", myFixture.file.text)
+        assertNullOrEmpty(myFixture.lookupElementStrings)
+    }
 
     fun testCompletion10() {
         myFixture.configureByFiles("CompletionFile10.glsl")
@@ -206,5 +224,284 @@ class GlslCompletionTest : BasePlatformTestCase() {
         val lookupElementStrings = myFixture.lookupElementStrings
         assertEquals(1, lookupElementStrings?.size)
         assertSameElements(lookupElementStrings!!.toList(), expectedComponents)
+    }
+
+    fun testLayoutQualifierCompletion() {
+        myFixture.configureByText("LayoutCompletion.vert", "lay<caret>")
+        myFixture.complete(CompletionType.BASIC)
+
+        val lookupStrings = myFixture.lookupElementStrings
+        if (lookupStrings == null) {
+            assertEquals("layout", myFixture.file.text)
+        } else {
+            assertContainsElements(lookupStrings, "layout")
+        }
+    }
+
+    fun testLayoutIdentifierCompletion() {
+        myFixture.configureByText("LayoutIdentifierCompletion.vert", "layout(loc<caret>) in vec3 pos;")
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(myFixture.lookupElementStrings!!, "location")
+    }
+
+    fun testQualifierCompletionAfterLayout() {
+        myFixture.configureByText("PostLayoutCompletion.vert", "layout(location = 0) i<caret> vec3 pos;")
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(myFixture.lookupElementStrings!!, "in", "inout")
+    }
+
+    fun testBuiltinTypesUseTypeIcon() {
+        myFixture.configureByText("TypeIconCompletion.glsl", "void main() { ve<caret> value; }")
+        myFixture.complete(CompletionType.BASIC)
+
+        val vec3 = myFixture.lookupElements!!.first { it.lookupString == "vec3" }
+        val presentation = LookupElementPresentation()
+        vec3.renderElement(presentation)
+        assertSame(AllIcons.Nodes.Type, presentation.icon)
+    }
+
+    fun testConstructorSwizzleCompletion() {
+        myFixture.configureByText("ConstructorSwizzleCompletion.fsh", "void main() { vec4 color = vec4(0.).<caret>; }")
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(myFixture.lookupElementStrings!!, "argb", "rgba", "xyzw")
+    }
+
+    fun testVectorComponentDoesNotOfferSwizzles() {
+        myFixture.configureByText("VectorComponent.fsh", "void main() { float value = vec4(0.)[0].<caret>; }")
+        myFixture.complete(CompletionType.BASIC)
+
+        assertNullOrEmpty(myFixture.lookupElementStrings)
+    }
+
+    fun testArrayElementOffersVectorSwizzles() {
+        myFixture.configureByText(
+            "ArrayElement.fsh",
+            "void main() { vec4 values[2]; vec4 value = values[0].<caret>; }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(myFixture.lookupElementStrings!!, "rgba", "xyzw")
+    }
+
+    fun testMatrixColumnOffersVectorSwizzles() {
+        myFixture.configureByText("MatrixColumn.fsh", "void main() { vec3 value = mat3(1.)[0].<caret>; }")
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(myFixture.lookupElementStrings!!, "rgb", "xyz")
+    }
+
+    fun testConstructorCompletionInsertionContext() {
+        myFixture.configureByText("ConstructorContext.glsl", "void main() { ve<caret> }")
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("void main() { vec2 }", myFixture.file.text)
+
+        myFixture.configureByText("ConstructorContext.glsl", "void main() { ve<caret> value; }")
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("void main() { vec2 value; }", myFixture.file.text)
+
+        myFixture.configureByText(
+            "ConstructorContext.glsl",
+            "void main() { ve<caret> /* type */ value; }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("void main() { vec2 /* type */ value; }", myFixture.file.text)
+
+        myFixture.configureByText(
+            "ConstructorContext.glsl",
+            "void main() { vec3 vector; ve<caret> = vec3(0.); }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("void main() { vec3 vector; vector = vec3(0.); }", myFixture.file.text)
+
+        myFixture.configureByText("ConstructorContext.glsl", "void doSth(ve<caret>) {}")
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("void doSth(vec2) {}", myFixture.file.text)
+
+        myFixture.configureByText("ConstructorContext.glsl", "void main() { vec3 value = ve<caret>; }")
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("void main() { vec3 value = vec3(); }", myFixture.file.text)
+
+        myFixture.configureByText(
+            "ConstructorContext.glsl",
+            "void doSth(vec3 v) {} void main() { doSth(ve<caret>); }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("void doSth(vec3 v) {} void main() { doSth(vec2()); }", myFixture.file.text)
+    }
+
+    fun testSameTypeVariableIsPreferredOverConstructor() {
+        myFixture.configureByText(
+            "VariablePriority.glsl",
+            "void main() { vec3 vector; vec3 value = v<caret>; }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertEquals("vector", myFixture.lookupElementStrings?.firstOrNull())
+    }
+
+    fun testExpectedTypeConstructorIsPreferredWithoutMatchingVariable() {
+        myFixture.configureByText(
+            "ConstructorPriority.glsl",
+            "void main() { vec3 value = v<caret>; }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertEquals("vec3", myFixture.lookupElementStrings?.firstOrNull())
+    }
+
+    fun testVariableIsPreferredOverConstructorInFunctionArgument() {
+        myFixture.configureByText(
+            "FunctionArgumentPriority.glsl",
+            "void use(vec3 value) {} void main() { vec3 vector; use(v<caret>); }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertEquals("vector", myFixture.lookupElementStrings?.firstOrNull())
+    }
+
+    fun testNestedCallDoesNotInheritDeclarationType() {
+        myFixture.configureByText(
+            "NestedCallPriority.glsl",
+            "void main() { vec3 vector; float scalar = dot(v<caret>, vector); }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertEquals("vector", myFixture.lookupElementStrings?.firstOrNull())
+    }
+
+    fun testCustomFunctionOverloadsCompletion() {
+        myFixture.configureByText(
+            "CustomFunctionOverloads.glsl",
+            """
+                float saturate(float value) { return value; }
+                vec3 saturate(vec3 value) { return value; }
+                void main() { sa<caret> }
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        val overloads = myFixture.lookupElements
+            ?.filter { it.lookupString.startsWith("saturate(") }
+            .orEmpty()
+        assertSameElements(
+            overloads.map { it.lookupString },
+            "saturate(float value)",
+            "saturate(vec3 value)",
+        )
+
+        val presentations = overloads.map { lookupElement ->
+            LookupElementPresentation().also(lookupElement::renderElement)
+        }
+        presentations.forEach { assertSame(AllIcons.Nodes.Function, it.icon) }
+        assertSameElements(presentations.map { it.typeText }, "float", "vec3")
+    }
+
+    fun testCustomFunctionCompletionBeforeFollowingStatement() {
+        myFixture.configureByText(
+            "CustomFunctionBeforeStatement.glsl",
+            """
+                void useVector(vec3 value) {}
+                void useVector(vec4 value) {}
+                void main() {
+                    vec3 vector = vec3(0.);
+                    use<caret>
+                    useVector(vector);
+                }
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(
+            myFixture.lookupElementStrings!!,
+            "useVector(vec3 value)",
+            "useVector(vec4 value)",
+        )
+    }
+
+    fun testSingleCustomFunctionCompletionBeforeFollowingStatement() {
+        myFixture.configureByText(
+            "SingleCustomFunctionBeforeStatement.glsl",
+            """
+                void useVector(vec3 value) {}
+                void main() {
+                    vec3 vector = vec3(0.);
+                    use<caret>
+                    useVector(vector);
+                }
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertEquals(
+            """
+                void useVector(vec3 value) {}
+                void main() {
+                    vec3 vector = vec3(0.);
+                    useVector()
+                    useVector(vector);
+                }
+            """.trimIndent(),
+            myFixture.file.text,
+        )
+    }
+
+    fun testStandaloneIdentifierRecoveryDoesNotAffectMultilineArguments() {
+        myFixture.configureByText(
+            "MultilineFunctionArgument.glsl",
+            """
+                void useVector(vec3 value) {}
+                void main() {
+                    useVector(
+                        ve<caret>
+                    );
+                }
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(myFixture.lookupElementStrings!!, "vec3")
+    }
+
+    fun testCustomFunctionCompletionBeforeCommentedStatement() {
+        myFixture.configureByText(
+            "CustomFunctionBeforeComment.glsl",
+            """
+                void useVector(vec3 value) {}
+                void useVector(vec4 value) {}
+                void main() {
+                    use<caret>
+                    /* keep this statement separate */
+                    useVector(vec3(0.));
+                }
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(
+            myFixture.lookupElementStrings!!,
+            "useVector(vec3 value)",
+            "useVector(vec4 value)",
+        )
+    }
+
+    fun testBuiltinFunctionOverloadsAreNotDuplicated() {
+        myFixture.configureByText("BuiltinFunctionDuplicates.glsl", "void main() { sin<caret> }")
+        myFixture.complete(CompletionType.BASIC)
+
+        val overloads = myFixture.lookupElementStrings
+            ?.filter { it.startsWith("sin(") }
+            .orEmpty()
+        assertNotEmpty(overloads)
+        assertEquals(overloads.distinct().size, overloads.size)
     }
 }

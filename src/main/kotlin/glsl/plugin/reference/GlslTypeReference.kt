@@ -17,37 +17,48 @@ import glsl.psi.interfaces.GlslStatement
 class GlslTypeReference(private val element: GlslType, textRange: TextRange) : GlslReference(element, textRange) {
 
     private val resolver = AbstractResolver<GlslTypeReference, GlslNamedType> { reference, _ ->
-        reference.doResolve()
-        reference.resolvedReferences.firstOrNull() as? GlslNamedType
+        synchronized(reference) {
+            reference.doResolve()
+            reference.resolvedReferences.firstOrNull() as? GlslNamedType
+        }
     }
 
     /**
      *
      */
     override fun resolve(): GlslNamedType? {
-        if (!shouldResolve()) return null
-        val resolveCache = ResolveCache.getInstance(project)
-        return resolveCache.resolveWithCaching(this, resolver, true, false)
+        return synchronized(this) {
+            if (!shouldResolve()) return@synchronized null
+            val resolveCache = ResolveCache.getInstance(project)
+            resolveCache.resolveWithCaching(this, resolver, true, false)
+        }
     }
 
     /**
      *
      */
     override fun getVariants(): Array<LookupElement> {
-        doResolve(CONTAINS)
-        return resolvedReferences.mapNotNull { it.getLookupElement() }.toTypedArray()
+        return synchronized(this) {
+            doResolve(CONTAINS)
+            resolvedReferences.mapNotNull { it.getLookupElement() }.toTypedArray()
+        }
     }
 
     /**
      *
      */
     override fun doResolve(filterType: FilterType) {
-        try {
-            resolvedReferences.clear()
-            currentFilterType = filterType
-            resolveType()
-        } catch (_: StopLookupException) {
-            includeFiles.clear()
+        synchronized(this) {
+            try {
+                resolvedReferences.clear()
+                includeFiles.clear()
+                currentFilterType = filterType
+                resolveType()
+            } catch (_: StopLookupException) {
+                // A matching reference deliberately stops the remaining scope walk.
+            } finally {
+                includeFiles.clear()
+            }
         }
     }
 
@@ -63,10 +74,11 @@ class GlslTypeReference(private val element: GlslType, textRange: TextRange) : G
      *
      */
     override fun resolveMany(): List<GlslNamedElement> {
-        if (!shouldResolve()) return emptyList()
-        val resolveCache = ResolveCache.getInstance(project)
-        resolveCache.resolveWithCaching(this, resolver, true, false)
-        return resolvedReferences
+        return synchronized(this) {
+            if (!shouldResolve()) return@synchronized emptyList()
+            doResolve()
+            resolvedReferences.toList()
+        }
     }
 
     /**

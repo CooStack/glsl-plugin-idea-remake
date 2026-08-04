@@ -8,6 +8,7 @@ import glsl.plugin.inspections.GlslErrorCode
 import glsl.plugin.psi.named.GlslNamedElement
 import glsl.plugin.psi.named.GlslNamedType
 import glsl.plugin.psi.named.GlslNamedVariable
+import glsl.plugin.utils.GlslUtils
 import glsl.psi.interfaces.GlslBuiltinTypeMatrix
 
 /**
@@ -45,7 +46,7 @@ abstract class GlslMatrix(node: ASTNode) : GlslBuiltinType(node) {
             is GlslScalar -> return this
             is GlslVector -> {
                 if (operation == "*") return other
-                val msg = GlslErrorCode.DOES_NOT_OPERATE_ON.message.format(operation, name, other.name)
+                val msg = GlslErrorCode.DOES_NOT_OPERATE_ON.message(operation, name ?: "", other.name ?: "")
                 glslError = GlslError(GlslErrorCode.DOES_NOT_OPERATE_ON, msg)
                 return this
             }
@@ -74,6 +75,16 @@ abstract class GlslMatrix(node: ASTNode) : GlslBuiltinType(node) {
             '4' -> 4
             else -> 0
         }
+    }
+
+    override fun getIndexedType(): GlslNamedType? {
+        val matrixName = name ?: return null
+        val matrixMarker = matrixName.indexOf("mat")
+        if (matrixMarker < 0) return null
+        val prefix = matrixName.substring(0, matrixMarker)
+        val dimensions = matrixName.substring(matrixMarker + 3)
+        val rowCount = dimensions.substringAfter('x', dimensions.takeLast(1))
+        return GlslUtils.createBuiltinTypeElement(project, "${prefix}vec$rowCount")
     }
 }
 

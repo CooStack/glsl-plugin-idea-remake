@@ -8,6 +8,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import glsl.GlslTypes.*
 import glsl.plugin.psi.named.GlslNamedType
 import glsl.plugin.utils.GlslUtils.createScalarTypeElement
+import glsl.plugin.utils.GlslUtils.getIndexedType
 import glsl.plugin.utils.GlslUtils.getType
 import glsl.psi.impl.GlslBuiltinTypeScalarImpl
 import glsl.psi.interfaces.*
@@ -60,9 +61,7 @@ abstract class GlslExprTypeImpl(node: ASTNode) : ASTWrapperPsiElement(node), Gls
      *
      */
     private fun getArrayIndexType(arrayIndex: GlslPostfixArrayIndex): GlslNamedType? {
-        val variableIdentifier = (arrayIndex.postfixExpr as GlslPrimaryExpr).variableIdentifier
-        val resolvedReference = variableIdentifier?.resolveReference()
-        return resolvedReference?.getAssociatedType()?.getScalarType()
+        return getIndexedType(arrayIndex, getPostfixType(arrayIndex.postfixExpr))
     }
 
     /**

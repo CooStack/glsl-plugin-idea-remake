@@ -114,6 +114,8 @@ object GlslTokenSets {
         PATCH,
         SAMPLE,
         SUBROUTINE,
+        TASKPAYLOADSHAREDEXT,
+        PERPRIMITIVEEXT,
         COHERENT,
         DEVICECOHERENT,
         QUEUEFAMILYCOHERENT,
@@ -176,6 +178,7 @@ object GlslTokenSets {
     )
 
     val TYPE_QUALIFIERS = TokenSet.create(
+        LAYOUT,
         CONST,
         INOUT,
         IN,
@@ -188,6 +191,8 @@ object GlslTokenSets {
         VARYING,
         PATCH,
         SAMPLE,
+        TASKPAYLOADSHAREDEXT,
+        PERPRIMITIVEEXT,
         HITATTRNV,
         HITATTREXT,
         PAYLOADNV,
