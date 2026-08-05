@@ -1,5 +1,9 @@
 # GLSL Plugin Changelog
 
+## [1.1.18]
+### Fixed
+- Keep the compiled preview animation loop running so `tick` and `time` advance without requiring a camera or window interaction.
+
 ## [1.1.17]
 ### Fixed
 - Retry the initial JCEF visibility sync after the tool window is attached so time-based previews do not remain paused until the window is moved.

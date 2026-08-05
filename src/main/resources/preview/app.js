@@ -2728,20 +2728,6 @@
     previewFrameRequest = requestAnimationFrame(drawFrame);
   }
 
-  function previewNeedsAnimation() {
-    if (state.activePingPongs.length) return true;
-    var animatedNames = aliasNames(0, "tick").concat(aliasNames(0, "time"));
-    var animatedPattern = new RegExp("(^|[^A-Za-z0-9_])(?:" + animatedNames.map(function (name) {
-      return name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }).join("|") + ")(?![A-Za-z0-9_])");
-    return state.passes.some(function (pass, passIndex) {
-      return pass.uniforms.some(function (uniform) {
-        var kind = engineUniformKind(uniform.name, passIndex);
-        return kind === "tick" || kind === "time";
-      }) || animatedPattern.test(String(pass.source || ""));
-    });
-  }
-
   function pausePreviewForGraphInteraction() {
     state.graphInteractionActive = true;
     if (graphInteractionReleaseTimer !== null) {
@@ -2784,7 +2770,7 @@
         }
       }
       state.tick++;
-      if (previewNeedsAnimation()) schedulePreviewFrame();
+      schedulePreviewFrame();
     } catch (error) {
       if (state.runtimeErrorLogged) return;
       state.runtimeErrorLogged = true;
