@@ -1,5 +1,9 @@
 # GLSL Plugin Changelog
 
+## [1.1.20]
+### Fixed
+- Make the model-output port select the actual preview pass, so a later model render that samples an earlier model texture is presented correctly.
+
 ## [1.1.19]
 ### Added
 - Allow multiple model-render nodes. Each model output can feed sampler inputs in the model or post-processing graph.

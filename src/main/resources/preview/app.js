@@ -90,6 +90,7 @@
   }
 
   function modelOutputPass() {
+    if (isModelPass(state.outputPass)) return state.outputPass;
     var indexes = modelPassList();
     return indexes.length ? indexes[indexes.length - 1] : -1;
   }
@@ -219,6 +220,7 @@
     state.compileRevision++;
     var index = state.fragments.length;
     if (kind === "model") {
+      var replaceModelOutput = isModelPass(state.outputPass);
       var modelIndexes = modelPassList();
       index = modelIndexes.length ? modelIndexes[modelIndexes.length - 1] + 1 : 0;
       state.fragments.splice(index, 0, null);
@@ -247,6 +249,7 @@
       state.modelPasses = modelIndexes.map(function (passIndex) { return passIndex >= index ? passIndex + 1 : passIndex; });
       state.modelPasses.push(index);
       syncModelPassAlias();
+      if (replaceModelOutput) state.outputPass = index;
     } else {
       state.fragments.push(null);
     }
@@ -2707,7 +2710,7 @@
     passes.forEach(function (pass) {
       if (pass.target) resizeTarget(pass.target, canvas.width, canvas.height);
     });
-    var geometry = getGeometry();
+    var geometry = passes.some(function (pass) { return pass.usesModel; }) ? getGeometry() : null;
     passes.forEach(function (pass, index) {
       var writers = pingPongs.filter(function (pingPong) {
         return pingPong.from === index && pingPong.read && pingPong.write;
@@ -3333,7 +3336,7 @@
     outputNode.style.left = storedOutput.left + "px";
     outputNode.style.top = storedOutput.top + "px";
     if (chain === "model") {
-      outputNode.innerHTML = '<header>模型输出</header><div class="port input graph-model-result-input"><span>颜色纹理</span><small>' + (outputPassIndex >= 0 ? '模型渲染 ' + modelPassOrdinal(outputPassIndex) : '未连接') + '</small></div>';
+      outputNode.innerHTML = '<header>模型输出</header><div class="port input graph-model-result-input" data-final-output="true"><span>颜色纹理</span><small>' + (outputPassIndex >= 0 ? '模型渲染 ' + modelPassOrdinal(outputPassIndex) : '未连接') + '</small></div>';
     } else {
       var outputLabel = isModelPass(state.outputPass) ? "模型输出 " + modelPassOrdinal(state.outputPass) :
         state.outputPass >= 0 ? "通道 " + (state.outputPass + 1) : "未连接";
@@ -3634,6 +3637,11 @@
       return;
     }
     if (inputPort.dataset.finalOutput && sourceKind === "pass" && Number.isInteger(source.from)) {
+      var outputChain = inputNode.dataset.graphChain;
+      if (chainForPass(source.from) !== outputChain) {
+        log("输出端只能连接当前节点图中的着色器。", "error");
+        return;
+      }
       state.outputPass = source.from;
       state.compileRevision++;
       renderGraph();
