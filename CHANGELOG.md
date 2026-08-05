@@ -1,5 +1,10 @@
 # GLSL Plugin Changelog
 
+## [1.1.19]
+### Added
+- Allow multiple model-render nodes. Each model output can feed sampler inputs in the model or post-processing graph.
+- Use the built-in fullscreen triangle when a model vertex shader is not configured.
+
 ## [1.1.18]
 ### Fixed
 - Keep the compiled preview animation loop running so `tick` and `time` advance without requiring a camera or window interaction.

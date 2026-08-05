@@ -22,6 +22,7 @@
     outputPass: -1,
     activeOutputPass: -1,
     modelPass: -1,
+    modelPasses: [],
     graphs: createGraphStates(),
     activeGraph: "model",
     obj: null,
@@ -71,7 +72,41 @@
   }
 
   function chainForPass(passIndex) {
-    return passIndex === state.modelPass ? "model" : "post";
+    return isModelPass(passIndex) ? "model" : "post";
+  }
+
+  function isModelPass(passIndex) {
+    return Number.isInteger(passIndex) &&
+      (state.modelPasses.indexOf(passIndex) >= 0 || passIndex === state.modelPass);
+  }
+
+  function modelPassList() {
+    var indexes = state.modelPasses.filter(function (passIndex, index, values) {
+      return Number.isInteger(passIndex) && passIndex >= 0 && passIndex < state.fragments.length && values.indexOf(passIndex) === index;
+    });
+    if (!indexes.length && Number.isInteger(state.modelPass) && state.modelPass >= 0 && state.modelPass < state.fragments.length) indexes.push(state.modelPass);
+    indexes.sort(function (left, right) { return left - right; });
+    return indexes;
+  }
+
+  function modelOutputPass() {
+    var indexes = modelPassList();
+    return indexes.length ? indexes[indexes.length - 1] : -1;
+  }
+
+  function modelPassOrdinal(passIndex) {
+    var ordinal = modelPassList().indexOf(passIndex);
+    return ordinal >= 0 ? ordinal + 1 : 0;
+  }
+
+  function modelSourceNodeId(passIndex) {
+    return "model-source:" + passIndex;
+  }
+
+  function syncModelPassAlias() {
+    var indexes = modelPassList();
+    state.modelPasses = indexes;
+    state.modelPass = indexes.length ? indexes[indexes.length - 1] : -1;
   }
 
   var defaultVertex = [
@@ -181,36 +216,37 @@
   }
 
   function addShaderNode(kind, nodePosition) {
-    if (kind === "model" && state.modelPass >= 0) {
-      log("模型渲染链中只能有一个模型渲染节点。", "warning");
-      return;
-    }
     state.compileRevision++;
-    var index = kind === "model" ? 0 : state.fragments.length;
+    var index = state.fragments.length;
     if (kind === "model") {
-      state.fragments.unshift(null);
+      var modelIndexes = modelPassList();
+      index = modelIndexes.length ? modelIndexes[modelIndexes.length - 1] + 1 : 0;
+      state.fragments.splice(index, 0, null);
       state.connections = state.connections.map(function (connection) {
         return {
-          from: Number.isInteger(connection.from) ? connection.from + 1 : connection.from,
+          from: Number.isInteger(connection.from) && connection.from >= index ? connection.from + 1 : connection.from,
           textureNode: connection.textureNode,
           pingPong: connection.pingPong,
-          to: connection.to + 1,
+          to: connection.to >= index ? connection.to + 1 : connection.to,
           input: connection.input
         };
       });
-      state.uniforms = shiftShaderUniformPassesForInsertion(state.uniforms, 0);
-      state.uniformTypes = shiftShaderUniformPassesForInsertion(state.uniformTypes, 0);
-      state.matrixInputs = shiftShaderUniformPassesForInsertion(state.matrixInputs, 0);
-      state.blackInputs = shiftUniformPassesForInsertion(state.blackInputs, 0);
+      state.uniforms = shiftShaderUniformPassesForInsertion(state.uniforms, index);
+      state.uniformTypes = shiftShaderUniformPassesForInsertion(state.uniformTypes, index);
+      state.matrixInputs = shiftShaderUniformPassesForInsertion(state.matrixInputs, index);
+      state.blackInputs = shiftUniformPassesForInsertion(state.blackInputs, index);
       ["model", "post"].forEach(function (chain) {
         var graph = graphState(chain);
-        graph.positions = shiftGraphPassPositionsForInsertion(graph.positions, 0);
+        graph.positions = shiftGraphPassPositionsForInsertion(graph.positions, index);
+        graph.positions = shiftGraphModelSourcePositionsForInsertion(graph.positions, index);
       });
       state.pingPongs.forEach(function (pingPong) {
-        if (Number.isInteger(pingPong.from)) pingPong.from++;
+        if (Number.isInteger(pingPong.from) && pingPong.from >= index) pingPong.from++;
       });
-      if (state.outputPass >= 0) state.outputPass++;
-      state.modelPass = 0;
+      if (state.outputPass >= index) state.outputPass++;
+      state.modelPasses = modelIndexes.map(function (passIndex) { return passIndex >= index ? passIndex + 1 : passIndex; });
+      state.modelPasses.push(index);
+      syncModelPassAlias();
     } else {
       state.fragments.push(null);
     }
@@ -342,9 +378,9 @@
     state.fragments.forEach(function (_, index) {
       interfaceIssuesForPass(index).forEach(function (issue) {
         var postIndex = state.fragments.slice(0, index + 1).filter(function (_, passIndex) {
-          return passIndex !== state.modelPass;
+          return !isModelPass(passIndex);
         }).length;
-        var label = index === state.modelPass ? "模型渲染" : "后处理 " + postIndex;
+        var label = isModelPass(index) ? "模型渲染 " + modelPassOrdinal(index) : "后处理 " + postIndex;
         issues.push(label + "：" + issue);
       });
     });
@@ -362,10 +398,10 @@
   function interfaceIssuesForPass(passIndex) {
     var fragment = state.fragments[passIndex];
     if (!fragment || !fragment.interfaces) return [];
-    var usesModel = passIndex === state.modelPass;
+    var usesModel = isModelPass(passIndex);
     var vertex = usesModel ? state.vertex : state.postVertex;
     var outputs = vertex && vertex.interfaces ? vertex.interfaces.filter(isVertexOutput) :
-      usesModel ? [
+      usesModel && state.vertex ? [
         { name: "vNormal", type: "vec3", array: null, layout: {} },
         { name: "vUv", type: "vec2", array: null, layout: {} }
       ] : [{ name: "vUv", type: "vec2", array: null, layout: {} }];
@@ -540,15 +576,15 @@
   function removeFragmentPass(index) {
     if (!Number.isInteger(index) || index < 0 || index >= state.fragments.length) return;
     state.compileRevision++;
-    var removedModel = state.modelPass === index;
+    var removedModel = isModelPass(index);
+    state.modelPasses = state.modelPasses.filter(function (passIndex) { return passIndex !== index; }).map(function (passIndex) {
+      return passIndex > index ? passIndex - 1 : passIndex;
+    });
     state.fragments.splice(index, 1);
     if (state.outputPass === index) state.outputPass = state.fragments.length ? Math.min(index, state.fragments.length - 1) : -1;
     else if (state.outputPass > index) state.outputPass--;
-    if (removedModel) {
-      state.modelPass = -1;
-    } else if (state.modelPass > index) {
-      state.modelPass--;
-    }
+    if (removedModel) state.modelPass = -1;
+    if (removedModel || state.modelPass > index) syncModelPassAlias();
     state.connections = state.connections.filter(function (connection) {
       return connection.to !== index && connection.from !== index;
     }).map(function (connection) {
@@ -578,6 +614,7 @@
     ["model", "post"].forEach(function (chain) {
       var graph = graphState(chain);
       graph.positions = shiftGraphPassPositions(graph.positions, index);
+      graph.positions = shiftGraphModelSourcePositions(graph.positions, index);
       graph.needsFit = true;
     });
     connectDefaultPasses();
@@ -675,6 +712,33 @@
       }
       var pass = Number(match[1]);
       shifted["pass:" + (pass >= insertedPass ? pass + 1 : pass)] = positions[key];
+      return shifted;
+    }, {});
+  }
+
+  function shiftGraphModelSourcePositions(positions, removedPass) {
+    return Object.keys(positions).reduce(function (shifted, key) {
+      var match = /^model-source:(\d+)$/.exec(key);
+      if (!match) {
+        shifted[key] = positions[key];
+        return shifted;
+      }
+      var pass = Number(match[1]);
+      if (pass === removedPass) return shifted;
+      shifted[modelSourceNodeId(pass > removedPass ? pass - 1 : pass)] = positions[key];
+      return shifted;
+    }, {});
+  }
+
+  function shiftGraphModelSourcePositionsForInsertion(positions, insertedPass) {
+    return Object.keys(positions).reduce(function (shifted, key) {
+      var match = /^model-source:(\d+)$/.exec(key);
+      if (!match) {
+        shifted[key] = positions[key];
+        return shifted;
+      }
+      var pass = Number(match[1]);
+      shifted[modelSourceNodeId(pass >= insertedPass ? pass + 1 : pass)] = positions[key];
       return shifted;
     }, {});
   }
@@ -1327,7 +1391,7 @@
   function isUniform(item) { return item.storage === "uniform"; }
 
   function linkedVertexUniform(name, passIndex) {
-    var file = passIndex === state.modelPass ? state.vertex : state.postVertex;
+    var file = isModelPass(passIndex) ? state.vertex : state.postVertex;
     return !!(file && file.interfaces && file.interfaces.some(function (item) {
       return item.storage === "uniform" && item.name === name;
     }));
@@ -1953,10 +2017,11 @@
     var candidatePingPongs = [];
     try {
       fragments.forEach(function (file, index) {
-        var usesModel = index === state.modelPass;
+        var usesModel = isModelPass(index);
+        var usesModelGeometry = usesModel && !!state.vertex;
         var usesCustomPostVertex = !usesModel && !!state.postVertex;
         if (usesCustomPostVertex) validatePostVertexUvInput();
-        var vertexSource = usesModel ? (state.vertex ? state.vertex.source : defaultVertex) :
+        var vertexSource = usesModel ? (state.vertex ? state.vertex.source : fullscreenVertex()) :
           usesCustomPostVertex ? state.postVertex.source : fullscreenVertex();
         var program = compileProgram(vertexSource, file.source, "通道 " + (index + 1) + " ");
         var target = null;
@@ -1965,7 +2030,7 @@
           var reflection = reflectProgram(program, index);
           var writesPingPong = state.pingPongs.some(function (pingPong) { return pingPong.from === index; });
           var feedsLaterPass = state.connections.some(function (connection) { return connection.from === index; });
-          target = index !== state.outputPass || writesPingPong || feedsLaterPass ? createTarget(usesModel) : null;
+          target = index !== state.outputPass || writesPingPong || feedsLaterPass ? createTarget(usesModelGeometry) : null;
           if (target) resizeTarget(target, Math.max(1, canvas.width), Math.max(1, canvas.height));
         } catch (targetError) {
           gl.deleteProgram(program);
@@ -1977,9 +2042,10 @@
           target: target,
           file: file,
           source: file.source,
-          usesModel: usesModel,
+          usesModel: usesModelGeometry,
+          modelPass: usesModel,
           usesCustomPostVertex: usesCustomPostVertex,
-          attributeInputs: captureAttributeInputs(program, usesModel ? "vertex" : "postVertex"),
+          attributeInputs: captureAttributeInputs(program, usesModelGeometry ? "vertex" : "postVertex"),
           uniforms: reflection.uniforms,
           values: captureUniformValues(reflection.uniforms, index),
           matrixInputs: captureMatrixInputs(reflection.uniforms, index),
@@ -2127,13 +2193,13 @@
     var vertex = state.vertex && state.vertex.interfaces ? state.vertex.interfaces.filter(function (item) {
       return item.storage === "uniform" && item.name === name;
     })[0] : null;
-    if (vertex && passIndex === state.modelPass) {
+    if (vertex && isModelPass(passIndex)) {
       return { stage: "vertex", pass: 0, name: name, type: vertex.type };
     }
     var postVertex = state.postVertex && state.postVertex.interfaces ? state.postVertex.interfaces.filter(function (item) {
       return item.storage === "uniform" && item.name === name;
     })[0] : null;
-    if (postVertex && passIndex !== state.modelPass) {
+    if (postVertex && !isModelPass(passIndex)) {
       return { stage: "postVertex", pass: 0, name: name, type: postVertex.type };
     }
     var fragment = state.fragments[passIndex];
@@ -3117,7 +3183,8 @@
     lane.textContent = chain === "model" ? "模型渲染链" : "后处理链";
     scene.appendChild(lane);
 
-    if (chain === "model" && state.modelPass >= 0) {
+    var outputPassIndex = modelOutputPass();
+    if (chain === "model" && modelPassList().length) {
       var inputNode = document.createElement("div");
       inputNode.className = "graph-node graph-terminal input-terminal";
       inputNode.dataset.nodeId = "input";
@@ -3126,24 +3193,27 @@
       inputNode.style.left = storedInput.left + "px";
       inputNode.style.top = storedInput.top + "px";
       inputNode.innerHTML = '<header>模型输入</header>' +
-        '<div class="port output graph-model-output" data-graph-output="model" data-source-kind="model" data-source-id="model"><span>模型 / 顶点</span><small>' + escapeHtml(state.vertex ? state.vertex.name : "内置顶点") + '</small></div>';
+        '<div class="port output graph-model-output" data-graph-output="model" data-source-kind="model" data-source-id="model"><span>模型 / 顶点</span><small>' + escapeHtml(state.vertex ? state.vertex.name : "全屏三角形") + '</small></div>';
       scene.appendChild(inputNode);
       makeGraphNodeDraggable(inputNode, "input", scene, chain);
     } else if (chain === "post") {
-      var bridge = document.createElement("div");
-      bridge.className = "graph-node graph-terminal input-terminal";
-      bridge.dataset.nodeId = "model-source";
-      bridge.dataset.graphChain = chain;
-      var storedBridge = graphPosition(chain, "model-source", inputLeft, mainTop);
-      bridge.style.left = storedBridge.left + "px";
-      bridge.style.top = storedBridge.top + "px";
-      var modelOutput = state.modelPass >= 0 ? passOutput(state.modelPass) : { supported: false, reason: "未创建模型渲染" };
-      bridge.innerHTML = '<header>模型输出</header>' +
-        '<div class="port output pass-output' + (modelOutput.supported ? '' : ' unsupported') + '"' +
-        (state.modelPass >= 0 ? ' data-source-kind="pass" data-source-id="' + state.modelPass + '"' : '') +
-        '><span>模型颜色</span><small>' + escapeHtml(modelOutput.supported ? "RGBA8" : modelOutput.reason) + '</small></div>';
-      scene.appendChild(bridge);
-      makeGraphNodeDraggable(bridge, "model-source", scene, chain);
+      modelPassList().forEach(function (passIndex, modelIndex) {
+        var bridge = document.createElement("div");
+        bridge.className = "graph-node graph-terminal input-terminal";
+        bridge.dataset.nodeId = modelSourceNodeId(passIndex);
+        bridge.dataset.graphChain = chain;
+        var bridgeId = modelSourceNodeId(passIndex);
+        var storedBridge = graphPosition(chain, bridgeId, inputLeft, mainTop + modelIndex * 165);
+        bridge.style.left = storedBridge.left + "px";
+        bridge.style.top = storedBridge.top + "px";
+        var modelOutput = passOutput(passIndex);
+        bridge.innerHTML = '<header>模型输出 ' + (modelIndex + 1) + '</header>' +
+          '<div class="port output pass-output' + (modelOutput.supported ? '' : ' unsupported') + '"' +
+          (modelOutput.supported ? ' data-source-kind="pass" data-source-id="' + passIndex + '"' : '') +
+          '><span>模型颜色</span><small>' + escapeHtml(modelOutput.supported ? "RGBA8" : modelOutput.reason) + '</small></div>';
+        scene.appendChild(bridge);
+        makeGraphNodeDraggable(bridge, bridgeId, scene, chain);
+      });
     }
 
     state.textureNodes.filter(function (textureNode) { return textureNode.chain === chain; }).forEach(function (textureNode, index) {
@@ -3226,11 +3296,11 @@
       node.style.top = top + "px";
       var inputs = samplerInputs(index);
       var output = passOutput(index);
-      var body = '<header><span>' + (isModel ? '模型渲染' : '后处理 ' + (graphIndex + 1)) + '</span>' +
+      var body = '<header><span>' + (isModel ? '模型渲染 ' + modelPassOrdinal(index) : '后处理 ' + (graphIndex + 1)) + '</span>' +
         '<span class="graph-node-actions"><button class="graph-node-browse" type="button" title="选择片元着色器" aria-label="选择片元着色器">...</button>' +
         '<button class="graph-node-delete" type="button" title="删除着色器节点" aria-label="删除着色器节点">×</button></span></header>';
       body += '<div class="graph-shader-file"><span class="stage-badge fragment">F</span><span><strong>片元着色器</strong><small>' + escapeHtml(entry.file ? entry.file.name : "未绑定") + '</small></span></div>';
-      if (isModel) body += '<button class="port input graph-model-input" data-model-input="true" data-target-pass="' + index + '" type="button"><span>模型 / 顶点</span><small>已连接</small></button>';
+      if (isModel) body += '<button class="port input graph-model-input" data-model-input="true" data-target-pass="' + index + '" type="button"><span>模型 / 顶点</span><small>' + (state.vertex ? '已连接' : '默认全屏三角形') + '</small></button>';
       inputs.forEach(function (input) {
         var connection = connectionSetting(index, input.name);
         var textureNode = connection && connection.textureNode ? textureNodeById(connection.textureNode) : null;
@@ -3263,9 +3333,9 @@
     outputNode.style.left = storedOutput.left + "px";
     outputNode.style.top = storedOutput.top + "px";
     if (chain === "model") {
-      outputNode.innerHTML = '<header>模型输出</header><div class="port input graph-model-result-input"><span>颜色纹理</span><small>' + (state.modelPass >= 0 ? '模型渲染' : '未连接') + '</small></div>';
+      outputNode.innerHTML = '<header>模型输出</header><div class="port input graph-model-result-input"><span>颜色纹理</span><small>' + (outputPassIndex >= 0 ? '模型渲染 ' + modelPassOrdinal(outputPassIndex) : '未连接') + '</small></div>';
     } else {
-      var outputLabel = state.outputPass === state.modelPass && state.modelPass >= 0 ? "模型输出" :
+      var outputLabel = isModelPass(state.outputPass) ? "模型输出 " + modelPassOrdinal(state.outputPass) :
         state.outputPass >= 0 ? "通道 " + (state.outputPass + 1) : "未连接";
       outputNode.innerHTML = '<header>输出</header><div class="port input graph-final-input" data-final-output="true"><span>预览画面</span><small>' + outputLabel + '</small></div>';
     }
@@ -3369,14 +3439,17 @@
       link.style.transform = "rotate(" + angle + "rad)";
     }
     var inputNode = chain === "model" ? scene.querySelector('[data-node-id="input"]') : null;
-    var modelPass = chain === "model" ? scene.querySelector('[data-node-id="pass:' + state.modelPass + '"]') : null;
-    if (inputNode && modelPass) {
-      updateLink(
-        "model-input",
-        graphPortPoint(inputNode.querySelector(".graph-model-output"), true),
-        graphPortPoint(modelPass.querySelector(".graph-model-input"), false),
-        "model-link"
-      );
+    if (inputNode) {
+      modelPassList().forEach(function (passIndex) {
+        var modelPassNode = scene.querySelector('[data-node-id="pass:' + passIndex + '"]');
+        if (!modelPassNode) return;
+        updateLink(
+          "model-input:" + passIndex,
+          graphPortPoint(inputNode.querySelector(".graph-model-output"), true),
+          graphPortPoint(modelPassNode.querySelector(".graph-model-input"), false),
+          "model-link"
+        );
+      });
     }
     state.connections.forEach(function (connection) {
       if (chainForPass(connection.to) !== chain) return;
@@ -3384,8 +3457,8 @@
         ? scene.querySelector('[data-node-id="' + cssEscape(textureNodeId(connection.textureNode)) + '"]')
         : connection.pingPong
           ? scene.querySelector('[data-node-id="' + cssEscape(pingPongNodeId(connection.pingPong)) + '"]')
-          : chain === "post" && connection.from === state.modelPass
-            ? scene.querySelector('[data-node-id="model-source"]')
+          : chain === "post" && isModelPass(connection.from)
+            ? scene.querySelector('[data-node-id="' + cssEscape(modelSourceNodeId(connection.from)) + '"]')
             : scene.querySelector('[data-node-id="pass:' + connection.from + '"]');
       var targetNode = scene.querySelector('[data-node-id="pass:' + connection.to + '"]');
       if (!sourceNode || !targetNode) return;
@@ -3405,8 +3478,8 @@
     });
     state.pingPongs.filter(function (pingPong) { return pingPong.chain === chain; }).forEach(function (pingPong) {
       if (!Number.isInteger(pingPong.from)) return;
-      var sourceNode = chain === "post" && pingPong.from === state.modelPass
-        ? scene.querySelector('[data-node-id="model-source"]')
+      var sourceNode = chain === "post" && isModelPass(pingPong.from)
+        ? scene.querySelector('[data-node-id="' + cssEscape(modelSourceNodeId(pingPong.from)) + '"]')
         : scene.querySelector('[data-node-id="pass:' + pingPong.from + '"]');
       var targetNode = scene.querySelector('[data-node-id="' + cssEscape(pingPongNodeId(pingPong.id)) + '"]');
       if (!sourceNode || !targetNode) return;
@@ -3422,18 +3495,19 @@
     });
     if (chain === "model") {
       var modelOutputNode = scene.querySelector('[data-node-id="model-output"]');
-      if (modelOutputNode && modelPass) {
+      var modelPassNode = modelOutputPass() >= 0 ? scene.querySelector('[data-node-id="pass:' + modelOutputPass() + '"]') : null;
+      if (modelOutputNode && modelPassNode) {
         updateLink(
           "model-output",
-          graphPortPoint(modelPass.querySelector(".pass-output"), true),
+          graphPortPoint(modelPassNode.querySelector(".pass-output"), true),
           graphPortPoint(modelOutputNode.querySelector(".graph-model-result-input"), false),
           "model-link"
         );
       }
     } else {
       var outputNode = scene.querySelector('[data-node-id="output"]');
-      var outputPass = state.modelPass >= 0 && state.outputPass === state.modelPass
-        ? scene.querySelector('[data-node-id="model-source"]')
+      var outputPass = isModelPass(state.outputPass)
+        ? scene.querySelector('[data-node-id="' + cssEscape(modelSourceNodeId(state.outputPass)) + '"]')
         : scene.querySelector('[data-node-id="pass:' + state.outputPass + '"]');
       if (outputNode && outputPass) {
         updateLink(
@@ -3785,8 +3859,8 @@
       addShader.type = "button";
       addShader.setAttribute("role", "menuitem");
       addShader.textContent = chain === "model" ? "添加模型渲染" : "添加后处理";
-      addShader.disabled = chain === "model" && state.modelPass >= 0;
-      addShader.title = addShader.disabled ? "模型渲染节点已存在" : "";
+      addShader.disabled = false;
+      addShader.title = "";
       addShader.addEventListener("click", function () {
         closeGraphContextMenu();
         addShaderNode(chain === "model" ? "model" : "post", { left: point.x - 155, top: point.y - 18 });
@@ -3907,8 +3981,9 @@
   }
 
   function setModelPass(passIndex) {
-    if (!Number.isInteger(passIndex) || passIndex < 0 || passIndex >= state.fragments.length || passIndex === state.modelPass) return;
-    state.modelPass = passIndex;
+    if (!Number.isInteger(passIndex) || passIndex < 0 || passIndex >= state.fragments.length || isModelPass(passIndex)) return;
+    state.modelPasses.push(passIndex);
+    syncModelPassAlias();
     state.compileRevision++;
     renderGraph();
     state.interfaceWarningSignature = null;
@@ -4006,6 +4081,7 @@
     state.outputPass = -1;
     state.activeOutputPass = -1;
     state.modelPass = -1;
+    state.modelPasses = [];
     state.graphs = createGraphStates();
     state.activeGraph = "model";
     state.selectedShader = { stage: "vertex", index: 0 };
