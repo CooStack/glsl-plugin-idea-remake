@@ -1,7 +1,11 @@
 import com.intellij.codeInsight.completion.CompletionType
 import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.codeInsight.lookup.LookupElementPresentation
+import com.intellij.codeInsight.template.impl.TemplateManagerImpl
 import com.intellij.icons.AllIcons
+import com.intellij.psi.PsiErrorElement
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class GlslCompletionTest : BasePlatformTestCase() {
@@ -236,6 +240,93 @@ class GlslCompletionTest : BasePlatformTestCase() {
         } else {
             assertContainsElements(lookupStrings, "layout")
         }
+    }
+
+    fun testStructKeywordCompletionAtExternalDeclaration() {
+        TemplateManagerImpl.setTemplateTesting(testRootDisposable)
+        myFixture.configureByText("StructCompletion.glsl", "struc<caret>")
+        myFixture.complete(CompletionType.BASIC)
+
+        val lookupStrings = myFixture.lookupElementStrings
+        if (lookupStrings == null) {
+            myFixture.checkResult("struct <caret> {\n    \n};")
+        } else {
+            assertEquals("struct", lookupStrings.first())
+            assertEquals(1, lookupStrings.count { it == "struct" })
+            myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+            myFixture.checkResult("struct <caret> {\n    \n};")
+        }
+
+        val templateState = TemplateManagerImpl.getTemplateState(myFixture.editor)
+        assertNotNull(templateState)
+        assertEquals("NAME", templateState!!.template.getVariableNameAt(templateState.currentVariableNumber))
+    }
+
+    fun testStructNameDoesNotOfferCompletion() {
+        listOf(
+            "struct <caret>{ float value; };",
+            "struct Na<caret> { float value; };",
+            "void main() { struct Na<caret> { float value; } value; }",
+        ).forEach { source ->
+            myFixture.configureByText("StructNameCompletion.glsl", source)
+            myFixture.complete(CompletionType.BASIC)
+
+            assertNullOrEmpty(myFixture.lookupElementStrings)
+            assertEquals(source.replace("<caret>", ""), myFixture.file.text)
+        }
+    }
+
+    fun testStructKeywordCompletionInsideFunction() {
+        TemplateManagerImpl.setTemplateTesting(testRootDisposable)
+        myFixture.configureByText(
+            "StructCompletion.glsl",
+            """
+                void main() {
+                    struc<caret>
+                }
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+
+        myFixture.checkResult("void main() {\n    struct <caret> {\n        \n    };\n}")
+    }
+
+    fun testStructKeywordCompletionIsNotOfferedInsideExistingTypeContexts() {
+        listOf(
+            "void consume(struc<caret> value) {}",
+            "const struc<caret> value;",
+            "struct Outer { struc<caret> value; };",
+        ).forEach { source ->
+            myFixture.configureByText("StructCompletionContext.glsl", source)
+            myFixture.complete(CompletionType.BASIC)
+
+            assertDoesntContain(myFixture.lookupElementStrings ?: emptyList(), "struct")
+            assertEquals(source.replace("<caret>", ""), myFixture.file.text)
+        }
+    }
+
+    fun testCompletedStructTemplateParsesAndTypeCompletionStillWorks() {
+        TemplateManagerImpl.setTemplateTesting(testRootDisposable)
+        myFixture.configureByText("StructCompletion.glsl", "struc<caret>")
+        myFixture.complete(CompletionType.BASIC)
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+
+        myFixture.type("Payload")
+        myFixture.performEditorAction("NextTemplateVariable")
+        myFixture.type("float value;")
+        PsiDocumentManager.getInstance(project).commitAllDocuments()
+
+        val errors = PsiTreeUtil.findChildrenOfType(myFixture.file, PsiErrorElement::class.java)
+        assertTrue(errors.joinToString("\n") { it.errorDescription }, errors.isEmpty())
+
+        myFixture.configureByText(
+            "StructTypeCompletion.glsl",
+            "struct Payload { float value; }; Pay<caret> payload;",
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(myFixture.lookupElementStrings!!, "Payload")
     }
 
     fun testLayoutIdentifierCompletion() {
@@ -503,5 +594,53 @@ class GlslCompletionTest : BasePlatformTestCase() {
             .orEmpty()
         assertNotEmpty(overloads)
         assertEquals(overloads.distinct().size, overloads.size)
+    }
+
+    fun testBuiltinFunctionCompletionInIncompleteInitializers() {
+        listOf("sin", "normalize", "mix", "texture").forEach { prefix ->
+            myFixture.configureByText(
+                "BuiltinFunctionInitializer.glsl",
+                """
+                    uniform float time;
+                    vec4 FragColor;
+                    void main() {
+                        float value = $prefix<caret>
+                        FragColor = vec4(1.0);
+                    }
+                """.trimIndent(),
+            )
+            myFixture.complete(CompletionType.BASIC)
+
+            assertTrue(
+                "Missing builtin completion for $prefix",
+                myFixture.lookupElementStrings.orEmpty().any { it.startsWith("$prefix(") },
+            )
+        }
+    }
+
+    fun testBuiltinFunctionCompletionInIncompleteAssignmentRightHandSide() {
+        myFixture.configureByText(
+            "BuiltinFunctionAssignment.glsl",
+            """
+                void main() {
+                    float value;
+                    value = co<caret>
+                    value = 1.0;
+                }
+            """.trimIndent(),
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertContainsElements(myFixture.lookupElementStrings ?: emptyList(), "cos(float angle)")
+    }
+
+    fun testBuiltinFunctionCompletionIsNotOfferedInTypePosition() {
+        myFixture.configureByText(
+            "BuiltinFunctionTypePosition.glsl",
+            "void main() { si<caret> value; }",
+        )
+        myFixture.complete(CompletionType.BASIC)
+
+        assertFalse(myFixture.lookupElementStrings.orEmpty().any { it.startsWith("sin(") })
     }
 }

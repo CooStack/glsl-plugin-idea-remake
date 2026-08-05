@@ -63,8 +63,7 @@ abstract class GlslNamedFunctionDeclarator(node: ASTNode) : GlslNamedVariableImp
      *
      */
     fun getParameterTypes(): List<GlslNamedType>? {
-        return getPsi().funcHeaderWithParams
-            ?.parameterDeclaratorList
-            ?.mapNotNull { it.getAssociatedType() }
+        val parameters = getPsi().funcHeaderWithParams ?: return emptyList()
+        return parameters.parameterDeclaratorList.mapNotNull { it.getAssociatedType() }
     }
 }

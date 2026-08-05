@@ -208,11 +208,6 @@ object GlslBuiltinUtils {
      *
      */
     private fun getShaderType(fileExtension: String?): ShaderType {
-        if (fileExtension == null) return GLSL
-        return try {
-            valueOf(fileExtension.lowercase())
-        } catch (_: IllegalArgumentException) {
-            GLSL
-        }
+        return ShaderType.fromFileExtension(fileExtension) ?: GLSL
     }
 }

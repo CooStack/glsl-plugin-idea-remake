@@ -1,5 +1,5 @@
-/*
-* Function documentation
-*/
+/**
+ * Function documentation
+ */
 int func() {}
 int absCall = <caret>func();

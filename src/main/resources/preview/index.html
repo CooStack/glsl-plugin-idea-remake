@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>__PREVIEW_STYLE__</style>
+</head>
+<body>
+  <main class="workspace">
+    <header class="toolbar">
+      <div class="brand"><span class="brand-mark"></span><strong>着色器预览</strong></div>
+      <button id="newPreview" class="button quiet" type="button" title="新建预览">新建</button>
+      <button id="compile" class="button primary" type="button"><span class="play"></span>编译并渲染</button>
+      <button id="pause" class="icon-button" type="button" title="暂停或继续渲染">II</button>
+      <span id="status" class="status idle">空闲</span>
+    </header>
+
+    <section class="content graph-mode">
+      <aside id="setupPanel" class="panel setup-panel">
+        <nav class="tabs" aria-label="预览视图">
+          <button class="tab" data-view="setup" type="button">场景</button>
+          <button class="tab active" data-view="graph" type="button">节点图</button>
+        </nav>
+
+        <div id="setupView" class="view">
+          <section class="section">
+            <div class="section-heading"><span>模型顶点着色器</span></div>
+            <div class="file-slot shader-slot" data-drop-stage="vertex">
+              <div class="slot-select">
+                <span class="stage-badge vertex">V</span>
+                <span class="file-copy"><strong>顶点着色器</strong><small id="vertexName">选择 .vertex、.vert、.vsh 或 .glsl</small></span>
+              </div>
+              <button id="vertexBrowse" class="slot-browse" type="button" title="选择顶点着色器文件" aria-label="选择顶点着色器文件">...</button>
+              <button id="vertexClear" class="remove-slot" type="button" title="清除顶点着色器" aria-label="清除顶点着色器">×</button>
+            </div>
+            <div class="file-slot shader-slot" data-drop-stage="postVertex">
+              <div class="slot-select">
+                <span class="stage-badge vertex">V</span>
+                <span class="file-copy"><strong>后处理顶点着色器</strong><small id="postVertexName">未绑定时使用内置全屏三角形</small></span>
+              </div>
+              <button id="postVertexBrowse" class="slot-browse" type="button" title="选择后处理顶点着色器文件" aria-label="选择后处理顶点着色器文件">...</button>
+              <button id="postVertexClear" class="remove-slot" type="button" title="重置为内置全屏三角形" aria-label="重置为内置全屏三角形">×</button>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-heading"><span>模型</span></div>
+            <div class="segmented" id="geometryModes">
+              <button type="button" data-geometry="sphere" class="active">球体</button>
+              <button type="button" data-geometry="cube">立方体</button>
+              <button type="button" data-geometry="plane">平面</button>
+              <button type="button" data-geometry="obj">OBJ</button>
+            </div>
+            <button id="objPicker" class="button wide hidden" type="button">导入 OBJ</button>
+            <small id="objName" class="hint hidden"></small>
+          </section>
+
+          <section class="section">
+            <div class="section-heading"><span>时间参数</span></div>
+            <label class="field"><span>来源</span>
+              <select id="timeSource"><option value="runtime">运行时间（秒）</option><option value="clock">本地时间（秒）</option></select>
+            </label>
+            <label class="field"><span>tick 别名</span><input id="tickAliases" type="text" value="tick, iFrame"></label>
+            <label class="field"><span>time 别名</span><input id="timeAliases" type="text" value="time, iTime"></label>
+          </section>
+
+          <section class="section">
+            <div class="section-heading"><span>相机</span><button id="resetCamera" class="text-button" type="button">重置</button></div>
+            <label class="field"><span>距离</span><input id="cameraDistance" type="range" min="1.5" max="12" step="0.1" value="4.5"></label>
+            <label class="field"><span>视野角</span><input id="cameraFov" type="number" min="20" max="100" value="45"></label>
+          </section>
+
+          <section class="section grow">
+            <div class="section-heading"><span>顶点参数</span><span id="vertexParameterCount" class="count">0</span></div>
+            <div id="vertexParameters" class="uniform-list"><p class="empty">绑定顶点着色器后显示参数。</p></div>
+          </section>
+
+        </div>
+
+        <div id="graphView" class="view graph-view active">
+          <div class="graph-toolbar">
+            <span class="graph-toolbar-actions">
+              <button id="autoLayout" class="button quiet" type="button">自动布局</button>
+              <span id="chainModes" class="segmented chain-modes">
+                <button type="button" data-chain="model" class="active">模型渲染</button>
+                <button type="button" data-chain="post">后处理</button>
+              </span>
+            </span>
+            <span class="graph-zoom-controls">
+              <button id="zoomOut" class="icon-button small" type="button" title="缩小节点图">-</button>
+              <button id="resetZoom" class="zoom-level" type="button" title="重置缩放">100%</button>
+              <button id="zoomIn" class="icon-button small" type="button" title="放大节点图">+</button>
+            </span>
+          </div>
+          <div class="graph-canvases">
+            <div id="modelGraphCanvas" class="graph-canvas active" data-graph-chain="model" aria-label="模型渲染节点图"></div>
+            <div id="postGraphCanvas" class="graph-canvas" data-graph-chain="post" aria-label="后处理节点图"></div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="panel-divider">
+        <div id="panelResizer" class="panel-resizer" role="separator" aria-orientation="vertical" aria-label="调整预览面板宽度" tabindex="0"></div>
+        <button id="panelCollapse" class="panel-collapse" type="button" title="收起设置面板" aria-label="收起设置面板" aria-controls="setupPanel" aria-expanded="true">
+          <span class="panel-collapse-icon" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <section class="stage">
+        <canvas id="previewCanvas"></canvas>
+        <div class="viewport-toolbar">
+          <button id="frameModel" class="icon-button" type="button" title="聚焦模型">F</button>
+          <span id="viewportStats">0 x 0</span>
+        </div>
+        <div id="canvasMessage" class="canvas-message">请至少选择一个片元着色器</div>
+      </section>
+    </section>
+
+    <section class="console-wrap">
+      <header><strong>编译输出</strong><button id="clearConsole" class="icon-button small" type="button" title="清空输出">x</button></header>
+      <pre id="console"><span class="info">[预览] 就绪。</span></pre>
+    </section>
+  </main>
+
+  <dialog id="interfaceWarning" class="warning-dialog">
+    <form method="dialog">
+      <header><strong>着色器接口不匹配</strong><button type="submit" class="icon-button small" aria-label="关闭">×</button></header>
+      <div id="interfaceWarningBody" class="warning-dialog-body"></div>
+      <footer><button type="submit" class="button primary">知道了</button></footer>
+    </form>
+  </dialog>
+
+  <script>
+    function ideQuery(request) {
+      return new Promise(function(resolve, reject) { __IDE_QUERY__ });
+    }
+  </script>
+  <script>__THREE_SCRIPT__</script>
+  <script>__PREVIEW_SCRIPT__</script>
+</body>
+</html>

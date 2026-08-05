@@ -6,13 +6,20 @@
     <resource-bundle>messages.GlslBundle</resource-bundle>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.jcef</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="着色器预览"
+                    anchor="right"
+                    factoryClass="glsl.plugin.preview.ui.ShaderPreviewToolWindowFactory"
+                    icon="/icons/shader-preview.svg"
+                    doNotActivateOnStart="true"
+                    canCloseContents="false"/>
         <!--  File  -->
         <fileType                       name="Glsl File"
                                         implementationClass="glsl.plugin.language.GlslFileType"
                                         language="Glsl"
-                                        extensions="glsl;vert;vsh;tesc;tese;geom;gsh;frag;fsh;comp;"/>
+                                        extensions="glsl;vert;vsh;vertex;tesc;tese;geom;gsh;frag;fsh;fragment;comp;"/>
         <!--  Language  -->
         <lang.parserDefinition          language="Glsl"
                                         implementationClass="glsl.plugin.language.GlslParserDefinition"/>
@@ -60,6 +67,8 @@
         <!--  Commenter  -->
         <lang.commenter                 language="Glsl"
                                         implementationClass="glsl.plugin.editor.GlslCommenter"/>
+        <enterHandlerDelegate           implementation="glsl.plugin.editor.GlslDocumentationEnterHandler"
+                                        order="before blockComment"/>
 
         <!--  Live Template  -->
         <defaultLiveTemplates           file="/live-templates/glsl-live-template.xml"/>
@@ -71,8 +80,8 @@
         <!--  Inspections  -->
         <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.incompatible.type.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionIncompatibleType"/>
-<!--        <localInspection                language="Glsl" enabledByDefault="true" groupName="GLSL" displayName="No matching function for call"-->
-<!--                                        implementationClass="glsl.plugin.inspections.GlslInspectionNoMatchingFunction"/>-->
+        <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.no.matching.function.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
+                                        implementationClass="glsl.plugin.inspections.GlslInspectionNoMatchingFunction"/>
         <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.too.many.arguments.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"
                                         implementationClass="glsl.plugin.inspections.GlslInspectionTooManyArguments"/>
         <localInspection                language="Glsl" enabledByDefault="true" bundle="messages.GlslBundle" key="inspection.too.few.arguments.display.name" groupBundle="messages.GlslBundle" groupKey="inspection.group.name"

@@ -1,6 +1,5 @@
 package glsl.plugin.psi.named.types.user
 
-import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.icons.AllIcons
 import com.intellij.lang.ASTNode
 import com.intellij.openapi.editor.colors.TextAttributesKey
@@ -48,13 +47,6 @@ abstract class GlslNamedStructSpecifier(node: ASTNode) : GlslNamedTypeImpl(node)
      */
     override fun getHighlightTextAttr(): TextAttributesKey {
         return GlslTextAttributes.USER_DEFINED_TYPE_TEXT_ATTR
-    }
-
-    /**
-     *
-     */
-    override fun getLookupElement(returnTypeText: String?): LookupElement? {
-        TODO("Not yet implemented")
     }
 
     /**

@@ -7,7 +7,20 @@ import glsl.GlslTypes.*
  *
  */
 enum class ShaderType {
-    GLSL, VERT, TESC, TESE, GEOM, FRAG, COMP
+    GLSL, VERT, TESC, TESE, GEOM, FRAG, COMP;
+
+    companion object {
+        fun fromFileExtension(fileExtension: String?): ShaderType? = when (fileExtension?.lowercase()) {
+            "glsl" -> GLSL
+            "vert", "vsh", "vertex" -> VERT
+            "tesc" -> TESC
+            "tese" -> TESE
+            "geom", "gsh" -> GEOM
+            "frag", "fsh", "fragment" -> FRAG
+            "comp" -> COMP
+            else -> null
+        }
+    }
 }
 
 object GlslDefinitions {

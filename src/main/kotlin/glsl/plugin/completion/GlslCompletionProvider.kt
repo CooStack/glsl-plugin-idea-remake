@@ -7,6 +7,7 @@ import com.intellij.codeInsight.completion.InsertHandler
 import com.intellij.codeInsight.completion.PlainPrefixMatcher
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.completion.PrioritizedLookupElement
+import com.intellij.codeInsight.template.TemplateManager
 import com.intellij.icons.AllIcons
 import com.intellij.psi.PsiComment
 import com.intellij.psi.PsiElement
@@ -34,6 +35,8 @@ import glsl.psi.interfaces.GlslFuncHeaderWithParams
 import glsl.psi.interfaces.GlslFunctionCall
 import glsl.psi.interfaces.GlslSingleDeclaration
 import glsl.psi.interfaces.GlslStatement
+import glsl.psi.interfaces.GlslStructSpecifier
+import glsl.psi.interfaces.GlslTypeName
 import glsl.psi.interfaces.GlslTypeSpecifier
 import javax.swing.Icon
 
@@ -95,6 +98,42 @@ class GlslBuiltinFuncCompletion : GlslCompletionProvider() {
             for (funcVariant in funcOverloads) {
                 resultSet.addElement(GlslUtils.getFunctionLookupElement(funcVariant, GlslIcon.PLUGIN_FILE_ICON))
             }
+        }
+    }
+}
+
+class GlslStructCompletion : GlslCompletionProvider() {
+    private val insertHandler = InsertHandler<LookupElement> { context, _ ->
+        context.setAddCompletionChar(false)
+        val templateManager = TemplateManager.getInstance(context.project)
+        val template = templateManager.createTemplate("", "GLSL", "struct \$NAME\$ {\n    \$END\$\n};")
+        template.addVariable("NAME", "", "", true)
+        template.isToReformat = true
+
+        context.document.deleteString(context.startOffset, context.tailOffset)
+        context.editor.caretModel.moveToOffset(context.startOffset)
+        context.setTailOffset(context.startOffset)
+        templateManager.startTemplate(context.editor, template)
+    }
+
+    override fun addCompletions(
+        parameters: CompletionParameters,
+        context: ProcessingContext,
+        resultSet: CompletionResultSet,
+    ) {
+        val item = createLookupElement("struct", insertHandler, psiElement = parameters.position)
+        resultSet.addElement(PrioritizedLookupElement.withPriority(item, 200.0))
+    }
+}
+
+class GlslStructNameCompletionBlocker : GlslCompletionProvider() {
+    override fun addCompletions(
+        parameters: CompletionParameters,
+        context: ProcessingContext,
+        resultSet: CompletionResultSet,
+    ) {
+        if (GlslCompletionContext.isStructNamePosition(parameters.position)) {
+            resultSet.stopHere()
         }
     }
 }
@@ -163,6 +202,12 @@ class GlslBuiltinTypesCompletion : GlslCompletionProvider() {
 }
 
 internal object GlslCompletionContext {
+    fun isStructNamePosition(position: PsiElement): Boolean {
+        val typeName = getParentOfType(position, GlslTypeName::class.java) ?: return false
+        val structSpecifier = typeName.parent as? GlslStructSpecifier ?: return false
+        return structSpecifier.typeName == typeName
+    }
+
     fun expectedTypeName(position: PsiElement): String? {
         return expectedInitializerType(position)?.name
     }

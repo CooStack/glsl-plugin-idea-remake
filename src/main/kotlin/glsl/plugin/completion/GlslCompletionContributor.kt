@@ -7,6 +7,7 @@ import com.intellij.codeInsight.completion.CompletionUtilCore
 import com.intellij.patterns.PlatformPatterns.psiElement
 import com.intellij.patterns.StandardPatterns.or
 import com.intellij.psi.util.PsiTreeUtil.getParentOfType
+import com.intellij.psi.util.PsiTreeUtil.prevVisibleLeaf
 import glsl.GlslTypes.*
 import glsl.data.GlslTokenSets
 import glsl.plugin.utils.GlslUtils
@@ -76,6 +77,11 @@ class GlslCompletionContributor : CompletionContributor() {
         .andNot(afterDot)
         .andNot(insidePpStatement)
 
+    private val structBeginning = or(
+        statementBeginning,
+        externalDeclarationBeginning,
+    )
+
     private val paramBeginning = psiElement()
         .andNot(psiElement().afterLeaf(numeric))
         .inside(psiElement(GlslFuncHeaderWithParams::class.java))
@@ -110,7 +116,17 @@ class GlslCompletionContributor : CompletionContributor() {
         val lineBeforeCaret = document.charsSequence.subSequence(lineStart, caretOffset)
         val beforeCaret = lineBeforeCaret.trim()
         val afterCaret = document.charsSequence.subSequence(caretOffset, lineEnd)
-        if (!STANDALONE_IDENTIFIER.matches(beforeCaret) || !afterCaret.isBlank()) return
+        if (!afterCaret.isBlank()) return
+
+        val recoveredTypeName = getParentOfType(leaf, GlslTypeName::class.java)
+        if (recoveredTypeName != null &&
+            prevVisibleLeaf(recoveredTypeName)?.node?.elementType in ASSIGNMENT_OPERATORS
+        ) {
+            context.dummyIdentifier = "${CompletionUtilCore.DUMMY_IDENTIFIER_TRIMMED};"
+            return
+        }
+
+        if (!STANDALONE_IDENTIFIER.matches(beforeCaret)) return
 
         val identifierOffset = lineStart + lineBeforeCaret.indexOfFirst { !it.isWhitespace() }
         val statement = getParentOfType(leaf, GlslStatement::class.java) ?: return
@@ -123,7 +139,9 @@ class GlslCompletionContributor : CompletionContributor() {
     }
 
     init {
+        extend(CompletionType.BASIC, insideTypeSpecifier, GlslStructNameCompletionBlocker())
         extend(CompletionType.BASIC, typeQualifiersPattern, GlslGenericCompletion(*typeQualifiers))
+        extend(CompletionType.BASIC, structBeginning, GlslStructCompletion())
         extend(CompletionType.BASIC, insideLayoutQualifier, GlslLayoutQualifierCompletion(*layoutQualifiers))
         extend(CompletionType.BASIC, statementBeginning, GlslGenericCompletion(*selectionKeywords, *iterationKeywords, *funcJumpsKeywords))
         extend(CompletionType.BASIC, insideIteration, GlslGenericCompletion(*iterationJumpsKeywords))
@@ -140,6 +158,19 @@ class GlslCompletionContributor : CompletionContributor() {
 
     companion object {
         private val STANDALONE_IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
+        private val ASSIGNMENT_OPERATORS = setOf(
+            EQUAL,
+            MUL_ASSIGN,
+            DIV_ASSIGN,
+            MOD_ASSIGN,
+            ADD_ASSIGN,
+            SUB_ASSIGN,
+            LEFT_ASSIGN,
+            RIGHT_ASSIGN,
+            AND_ASSIGN,
+            XOR_ASSIGN,
+            OR_ASSIGN,
+        )
     }
 }
 

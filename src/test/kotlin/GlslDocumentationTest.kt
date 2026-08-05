@@ -1,4 +1,5 @@
 import com.intellij.codeInsight.documentation.DocumentationManager
+import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import glsl.plugin.editor.GlslDocumentationProvider
 import glsl.psi.interfaces.GlslFunctionCall
@@ -72,14 +73,71 @@ class GlslDocumentationTest : BasePlatformTestCase() {
         assertFalse(uaddCarry.contains("232"))
     }
 
-//    fun testDocumentationFile2() {
-//        myFixture.configureByFile("DocumentationFile2.glsl")
-//        val originalElement = myFixture.elementAtCaret
-//        val element = DocumentationManager
-//            .getInstance(project)
-//            .findTargetElement(myFixture.editor, originalElement.containingFile, originalElement)
-//        val doc = DocumentationManager.getProviderFromElement(element).generateDoc(element, originalElement)
-//        assertNotNull(doc)
-//        assertTrue(doc!!.contains("Function documentation"))
-//    }
+    fun testUserFunctionDocumentation() {
+        val file = myFixture.configureByFile("DocumentationFile2.glsl")
+        val caretOffset = myFixture.editor.caretModel.offset
+        val contextElement = file.findElementAt(caretOffset)
+        val provider = GlslDocumentationProvider()
+        val element = provider.getCustomDocumentationElement(
+            myFixture.editor,
+            file,
+            contextElement,
+            caretOffset,
+        )
+        val doc = provider.generateDoc(element, contextElement)
+        assertNotNull(doc)
+        assertTrue(doc!!.contains("int func()"))
+        assertTrue(doc.contains("Function documentation"))
+    }
+
+    fun testUserFunctionDocumentationAtDeclaration() {
+        val file = myFixture.configureByText(
+            "DocumentationDeclaration.glsl",
+            "/** Declaration documentation. */\nint fu<caret>nc() {}",
+        )
+        val caretOffset = myFixture.editor.caretModel.offset
+        val contextElement = file.findElementAt(caretOffset)
+        val provider = GlslDocumentationProvider()
+
+        val element = provider.getCustomDocumentationElement(
+            myFixture.editor,
+            file,
+            contextElement,
+            caretOffset,
+        )
+        val doc = provider.generateDoc(element, contextElement)
+
+        assertNotNull(doc)
+        assertTrue(doc!!.contains("Declaration documentation."))
+    }
+
+    fun testDocumentationCommentIsClosedOnEnter() {
+        myFixture.configureByText(
+            "DocumentationEnter.glsl",
+            "void main() {\n    /**<caret>\n}",
+        )
+        myFixture.performEditorAction(IdeActions.ACTION_EDITOR_ENTER)
+
+        myFixture.checkResult("void main() {\n    /**\n     * <caret>\n     */\n}")
+    }
+
+    fun testDocumentationCommentLineContinuesOnEnter() {
+        myFixture.configureByText(
+            "DocumentationEnter.glsl",
+            "void main() {\n    /**\n     * First line<caret>\n     */\n}",
+        )
+        myFixture.performEditorAction(IdeActions.ACTION_EDITOR_ENTER)
+
+        myFixture.checkResult("void main() {\n    /**\n     * First line\n     * <caret>\n     */\n}")
+    }
+
+    fun testDocumentationCommentUsesExistingClosingDelimiter() {
+        myFixture.configureByText(
+            "DocumentationEnter.glsl",
+            "void main() {\n    /**<caret>*/\n}",
+        )
+        myFixture.performEditorAction(IdeActions.ACTION_EDITOR_ENTER)
+
+        myFixture.checkResult("void main() {\n    /**\n     * <caret>\n     */\n}")
+    }
 }

@@ -21,6 +21,7 @@ repositories {
 dependencies {
     intellijPlatform {
         intellijIdea '2026.2.0.1'
+        bundledPlugin 'com.intellij.modules.jcef'
         testFramework TestFrameworkType.Platform.INSTANCE
     }
     testImplementation 'junit:junit:4.13.2'

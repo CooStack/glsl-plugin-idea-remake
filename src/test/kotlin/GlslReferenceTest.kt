@@ -281,4 +281,15 @@ class GlslReferenceTest : BasePlatformTestCase() {
         assertEquals("i", (resolve as GlslSingleDeclaration).name)
         assertInstanceOf(resolve.parent?.parent, GlslIterationStatement::class.java)
     }
+
+    fun testZeroParameterFunctionReference() {
+        myFixture.configureByText(
+            "ZeroParameterFunction.glsl",
+            "float value() { return 1.0; } void main() { float result = val<caret>ue(); }",
+        )
+
+        val resolve = myFixture.getReferenceAtCaretPosition()?.resolve()
+        assertInstanceOf(resolve, GlslFunctionDeclarator::class.java)
+        assertEquals("value", (resolve as GlslFunctionDeclarator).name)
+    }
 }

@@ -182,7 +182,7 @@ object GlslUtils {
     @JvmStatic
     fun isShaderFile(element: PsiElement): Boolean {
         val extension = element.containingFile.virtualFile.extension
-        return enumValues<ShaderType>().any { extension?.lowercase() == it.name.lowercase() }
+        return ShaderType.fromFileExtension(extension) != null
     }
 
     /**

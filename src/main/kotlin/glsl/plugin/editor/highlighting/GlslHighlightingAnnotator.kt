@@ -5,13 +5,18 @@ import com.intellij.lang.annotation.Annotator
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.psi.PsiElement
+import glsl.plugin.inspections.GlslErrorCode
 import glsl.plugin.psi.GlslIdentifier
+import glsl.plugin.psi.GlslType
+import glsl.plugin.psi.GlslVariable
 import glsl.plugin.psi.named.GlslNamedElement
 import glsl.plugin.psi.named.types.builtins.GlslBuiltinType
 import glsl.plugin.utils.GlslBuiltinUtils.isBuiltinConstant
 import glsl.plugin.utils.GlslBuiltinUtils.isBuiltinFunction
 import glsl.plugin.utils.GlslBuiltinUtils.isBuiltinShaderVariable
 import glsl.psi.interfaces.GlslLayoutQualifierId
+import glsl.psi.interfaces.GlslPpStatement
+import glsl.psi.interfaces.GlslPrimaryExpr
 
 
 /**
@@ -37,7 +42,7 @@ class GlslHighlightingAnnotator : Annotator {
             if (reference != null) {
                 setReferenceHighlighting(reference, holder)
             } else {
-                setDeclarationHighlighting(element, holder)
+                setDeclarationOrErrorHighlighting(element, holder)
             }
         }
 
@@ -56,13 +61,45 @@ class GlslHighlightingAnnotator : Annotator {
     /**
      *
      */
-    private fun setDeclarationHighlighting(element: GlslIdentifier, holder: AnnotationHolder) {
+    private fun setDeclarationOrErrorHighlighting(element: GlslIdentifier, holder: AnnotationHolder) {
         if (element.parent is GlslLayoutQualifierId) {
             createAnnotation(holder, GlslTextAttributes.VARIABLE_TEXT_ATTR)
             return
         }
-        val declaration = element.getDeclaration() ?: return
-        createAnnotation(holder, declaration.getHighlightTextAttr())
+        val declaration = element.getDeclaration()
+        if (declaration != null) {
+            createAnnotation(holder, declaration.getHighlightTextAttr())
+            return
+        }
+
+        when (element) {
+            is GlslType -> {
+                if (element.isEmpty()) return
+                createErrorAnnotation(
+                    holder,
+                    GlslErrorCode.UNRESOLVED_TYPE.message(element.getName()),
+                )
+            }
+            is GlslVariable -> {
+                if (!isExpressionReference(element)) return
+                createErrorAnnotation(
+                    holder,
+                    GlslErrorCode.UNRESOLVED_SYMBOL.message(element.getName()),
+                )
+            }
+        }
+    }
+
+    private fun isExpressionReference(element: GlslVariable): Boolean {
+        if (element.isEmpty()) return false
+        if (element.parent !is GlslPrimaryExpr) return false
+
+        var parent = element.parent
+        while (parent != null) {
+            if (parent is GlslPpStatement) return false
+            parent = parent.parent
+        }
+        return true
     }
 
     /**
@@ -73,5 +110,9 @@ class GlslHighlightingAnnotator : Annotator {
         holder.newSilentAnnotation(HighlightSeverity.INFORMATION)
             .textAttributes(textAttr)
             .create()
+    }
+
+    private fun createErrorAnnotation(holder: AnnotationHolder, message: String) {
+        holder.newAnnotation(HighlightSeverity.ERROR, message).create()
     }
 }

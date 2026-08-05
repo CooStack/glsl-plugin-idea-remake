@@ -1,2 +1,2 @@
 #include "IncludeFile3.glsl"
-int a = <caret>b;
+int a = <error descr="Cannot resolve symbol 'b'."><caret>b</error>;

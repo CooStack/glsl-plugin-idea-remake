@@ -1,5 +1,86 @@
 # GLSL Plugin Changelog
 
+## [1.1.16]
+### Fixed
+- Stop continuously redrawing static shaders that do not consume `tick`, `time`, or Ping-Pong state.
+- Pause WebGL rendering while dragging, panning, zooming, wiring, or resizing the graph, then render the latest frame when interaction ends.
+- Reuse graph connection elements while nodes move instead of rebuilding every line on each animation frame.
+
+## [1.1.15]
+### Added
+- Add a divider button that collapses and restores the scene or graph panel without losing its resized width.
+
+## [1.1.14]
+### Fixed
+- Raise the JCEF off-screen rendering limit to 60 FPS so the visible preview is not capped by the browser host after its animation loop has been uncapped.
+
+## [1.1.13]
+### Changed
+- Render at the browser's native `requestAnimationFrame` rate while the preview tool window is visible.
+
+### Fixed
+- Stop the preview animation loop when the tool window is hidden and resume it when the window is reopened.
+
+## [1.1.12]
+### Added
+- Use separate model-render and post-processing graph canvases, each with its own layout, pan, and zoom state.
+- Create shader, texture, and Ping-Pong nodes from the context menu of the active graph.
+- Create empty texture nodes first, then bind or replace their images by dropping files from the IDE onto the card.
+- Allow scalar and vector parameters to use numeric constants or live `tick`, `time`, resolution, camera, and Ping-Pong variables.
+- Add model and post-processing vertex-shader settings, reflected vertex inputs and uniforms, editable matrix sources, UV semantics, and global `tick` / `time` aliases.
+- Warn when a vertex shader's outputs do not match a fragment shader's inputs by location, name, type, or array length.
+
+### Fixed
+- Bind common custom vertex-shader matrix names such as `projMat`, `viewMat`, and `transMat`, and recognize `pos` as a position attribute.
+- Generate UVs for built-in geometry and OBJ files without texture coordinates.
+- Keep mesh index buffers isolated when custom post-processing vertex shaders create their screen geometry, and reload those shaders during recompilation.
+- Make global `tick` and `time` aliases replaceable without leaving removed built-in names hidden or stuck at zero.
+- Treat conflicting engine aliases and incompatible alias types as ordinary uniforms, and report unsupported integer, matrix, or array vertex inputs before rendering.
+- Coalesce graph drag and zoom updates, cache uniform locations, reuse camera matrices, and throttle WebGL error checks.
+- Close the graph context menu when the user clicks an empty area of either graph.
+- Keep declared sampler ports visible when WebGL optimizes unused sampler uniforms out of the active program.
+
+## [1.1.11]
+### Added
+- Recompile valid Graph changes automatically. After an automatic failure, keep the last working render and require one successful manual compile before automatic compilation resumes.
+- Add configurable per-frame Ping-Pong write counts, plus editable iteration and phase uniform aliases. Phase `0` writes Ping and phase `1` writes Pong.
+- Allow multiple texture nodes to share one imported texture resource.
+
+### Fixed
+- Preserve the active texture handles and Ping-Pong history when a candidate Graph fails to compile or render.
+- Prevent stale image decoding requests from replacing a newer import of the same texture.
+- Support single-pass Ping-Pong feedback without blitting from the default framebuffer.
+- Place newly created texture and Ping-Pong nodes without covering existing cards.
+- Allow Graph links to start from either socket and keep active drags intact while automatic compilation refreshes the Graph.
+- Keep an offscreen target for an intermediate output pass when later passes still read from it.
+- Keep custom Graph node positions when a fragment pass is removed.
+- Accept vertex and fragment shader file drops directly on their Graph cards.
+
+## [1.1.10]
+### Added
+- Add draggable shader graph nodes, left-button panning, zoom controls, and a resizable preview panel.
+- Add editable model and final output connections, independent texture nodes with explicit wiring, and direct IDE file drag-and-drop.
+- Group uniform values by fragment pass and allow per-pass aliases such as `iFrame` and `iTime` for `tick` and `time`.
+
+### Changed
+- Remove compute shader configuration from the preview because WebGL2 cannot execute compute shaders.
+
+### Fixed
+- Draw graph links from socket center to socket center and keep wiring active outside the graph canvas.
+- Use a black 1 x 1 texture for unbound `sampler2D` inputs and retry image uploads through decoded RGBA pixels when JCEF rejects the direct path.
+- Correct the horizontal camera orbit direction when dragging with the middle mouse button.
+- Read shader documents through an IntelliJ read action when requests originate from JCEF threads.
+- Keep the last working render active after a failed recompile or framebuffer update.
+
+## [1.1.9]
+### Added
+- Add a WebGL2 shader preview tool window with built-in and OBJ models, reflected uniforms, camera controls, `tick` and `time` inputs, and multi-pass framebuffer rendering.
+- Add Simplified Chinese labels, status messages, file dialogs, and diagnostics throughout the shader preview.
+
+### Fixed
+- Keep the last working preview when shader recompilation or rendering fails.
+- Handle stale shader reads, legacy `gl_FragColor` conversion, and framebuffer allocation failures.
+
 ## [1.1.8]
 ### Added
 - Complete `layout` declaration qualifiers and common OpenGL 4.6 layout identifiers.

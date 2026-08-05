@@ -25,6 +25,8 @@ enum class GlslErrorCode(private val key: String) {
     CANT_ACCESS_ARRAY_ELEMENT("error.cant.access.array.element"),
     INVALID_CALL_OF("error.invalid.call.of"),
     INVALID_SWIZZLE("error.invalid.swizzle"),
+    UNRESOLVED_SYMBOL("error.unresolved.symbol"),
+    UNRESOLVED_TYPE("error.unresolved.type"),
     ;
 
     fun message(vararg params: Any): String = GlslBundle.message(key, *params)
