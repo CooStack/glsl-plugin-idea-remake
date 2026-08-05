@@ -1,5 +1,10 @@
 # GLSL Plugin Changelog
 
+## [1.1.17]
+### Fixed
+- Retry the initial JCEF visibility sync after the tool window is attached so time-based previews do not remain paused until the window is moved.
+- Keep the animation loop active when a compiled shader source consumes a configured `tick` or `time` alias, even if the driver optimizes the uniform reflection differently.
+
 ## [1.1.16]
 ### Fixed
 - Stop continuously redrawing static shaders that do not consume `tick`, `time`, or Ping-Pong state.

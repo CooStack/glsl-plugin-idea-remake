@@ -35,6 +35,7 @@ import java.awt.event.HierarchyEvent
 import java.awt.event.HierarchyListener
 import java.util.Base64
 import javax.swing.JComponent
+import javax.swing.Timer
 
 class ShaderPreviewToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
@@ -90,6 +91,7 @@ class ShaderPreviewToolWindowFactory : ToolWindowFactory {
 
 private fun installPreviewVisibilitySync(browser: JBCefBrowser, parentDisposable: Disposable) {
     val component = browser.component
+    var delayedInitialSync: Timer? = null
     val syncVisibility = {
         browser.runJavaScript(
             "window.shaderPreviewSetWindowVisible && window.shaderPreviewSetWindowVisible(${component.isShowing});",
@@ -97,6 +99,8 @@ private fun installPreviewVisibilitySync(browser: JBCefBrowser, parentDisposable
     }
     val listener = HierarchyListener { event ->
         if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() == 0L) return@HierarchyListener
+        delayedInitialSync?.stop()
+        delayedInitialSync = null
         syncVisibility()
     }
     component.addHierarchyListener(listener)
@@ -105,13 +109,27 @@ private fun installPreviewVisibilitySync(browser: JBCefBrowser, parentDisposable
             override fun onLoadEnd(browser: CefBrowser?, frame: CefFrame?, httpStatusCode: Int) {
                 if (frame?.isMain != true) return
                 ApplicationManager.getApplication().invokeLater {
-                    if (!Disposer.isDisposed(parentDisposable)) syncVisibility()
+                    if (Disposer.isDisposed(parentDisposable)) return@invokeLater
+                    delayedInitialSync?.stop()
+                    syncVisibility()
+                    if (!component.isShowing) {
+                        delayedInitialSync = Timer(250) {
+                            delayedInitialSync = null
+                            if (!Disposer.isDisposed(parentDisposable)) syncVisibility()
+                        }.apply {
+                            isRepeats = false
+                            start()
+                        }
+                    }
                 }
             }
         },
         browser.cefBrowser,
     )
-    Disposer.register(parentDisposable) { component.removeHierarchyListener(listener) }
+    Disposer.register(parentDisposable) {
+        delayedInitialSync?.stop()
+        component.removeHierarchyListener(listener)
+    }
 }
 
 private val previewDropExtensions = setOf(
