@@ -22,3 +22,12 @@ Assuming you're developing with Intellij (and you want to develop with Intellij)
 ## Test
 Just execute the `test` task from the Gradle tab or run specific classes or tests from within the ide.
 
+
+## 须知
+这个项目是基于原项目2025年的最新版 fork来的
+所有的更改都是 gpt-5.6-sol 模型制作
+
+fork此项目纯为了个人方便， 所以我没有做为新插件上传到jetbrains插件市场
+如果有问题，你可以fork这个fork， 然后自己或者用AI修复， 也可以直接把修复好的内容合并到这个项目里
+
+不过，因为所有的测试都是AI进行，我并没有参与， 我只参与了实际使用测试，所以并不保证会不会有什么安全问题
